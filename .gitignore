@@ -1,0 +1,23 @@
+# Large media: never commit videos or raw frames
+samples/*
+!samples/.gitkeep
+*.mp4
+*.mkv
+*.webm
+*.mov
+
+# Debug output
+out/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Web
+web/node_modules/
+web/dist/
+
+.DS_Store

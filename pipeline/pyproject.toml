@@ -1,0 +1,24 @@
+[project]
+name = "archimap"
+version = "0.1.0"
+description = "Build Dofus Retro zone maps from gameplay videos"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "opencv-python-headless>=4.9",
+    "pillow>=10.2",
+    "pytesseract>=0.3.10",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["archimap"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
