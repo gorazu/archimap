@@ -65,6 +65,10 @@ The map opens as a **plan**: one drawn tile per map, with corridors for the pass
 
 Click or tap a map to mark it checked. Hover (desktop) or tap (mobile) shows its coordinates. Progress is saved in the browser per zone, and **Nouvelle chasse** clears it. The selected zone is kept in the URL (`#zone-slug`), so you can link to it.
 
+### Deployment
+
+The site is deployed on Vercel from GitHub: the Vercel project imports `gorazu/archimap` with **Root Directory** set to `web`, and `web/vercel.json` sets the Bun install, the Vite build and the `dist` output. Every push to `main` redeploys; commit regenerated zone data in `web/public/data/` to publish it.
+
 ## Phase 3: live capture
 
 In desktop Chrome or Edge, open a zone and click **Direct**, then **Démarrer la capture** and share the Dofus Retro window (modern UI enabled, any window size). Archimap finds the game area and the coordinates by itself, reads them about twice per second, and checks each map you walk onto. The current map is outlined in blue and kept in view.
