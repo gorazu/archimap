@@ -14,7 +14,7 @@ import cv2
 from .dedupe import dedupe
 from .export import export_zone, update_zone_index
 from .frames import grab_frame, iter_frames, probe
-from .infer import fill_coordinates, resolve_with_route, route_links
+from .infer import fill_coordinates, place_between_neighbours, resolve_with_route, route_links
 from .layout import detect_layout, distinct_frames
 from .models import Box, MapVisit
 from .ocr import TEXT_VARIANTS, read_coords, sample_evenly, tally, vote
@@ -126,6 +126,7 @@ def apply_ocr(visit: MapVisit, variants: tuple[tuple[float, int], ...]) -> None:
                 for r in read_coords(c, variants)]
     coords, confidence, text = vote(readings)
     visit.ocr_text = text
+    visit.ocr_texts = [r.text for r in readings]
     visit.candidates = tally(readings)
     if coords is not None:
         visit.coords, visit.source, visit.confidence = coords, "ocr", confidence
@@ -175,6 +176,9 @@ def main(argv: list[str] | None = None) -> int:
         if visit.coords != before:
             print(f"  map {visit.index:3d}  OCR read [{before[0]},{before[1]}], next to the "
                   f"neighbouring maps: [{visit.coords[0]},{visit.coords[1]}]")
+    for visit in place_between_neighbours(visits):
+        print(f"  map {visit.index:3d}  OCR unreliable, placed between its neighbours: "
+              f"[{visit.coords[0]},{visit.coords[1]}] (check it on the map)")
     fill_coordinates(visits)
     maps = dedupe(visits)
 

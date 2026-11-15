@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import numpy as np
 
 from .models import MapVisit
@@ -12,6 +14,8 @@ DELTA = {"left": (-1, 0), "right": (1, 0), "top": (0, -1), "bottom": (0, 1)}
 OPPOSITE = {"left": "right", "right": "left", "top": "bottom", "bottom": "top"}
 # OCR votes below this share are checked against the route.
 AMBIGUOUS_SHARE = 0.75
+# Below this share, a vote that doesn't fit the route is treated as unread.
+UNRELIABLE_SHARE = 0.5
 
 
 def motion_mask(smalls: list[np.ndarray], threshold: float = 25.0) -> np.ndarray | None:
@@ -120,3 +124,42 @@ def route_links(visits: list[MapVisit]) -> list[tuple[tuple[int, int], tuple[int
         if a.coords and b.coords and _adjacent(a.coords, b.coords):
             links.add(tuple(sorted((a.coords, b.coords))))
     return sorted(links)
+
+
+def _numbers(texts: list[str]) -> set[int]:
+    """Every number OCR got out of its readings, even unparsable ones ("-33,451-")."""
+    return {int(n) for t in texts for n in re.findall(r"-?\d+", t)}
+
+
+def place_between_neighbours(visits: list[MapVisit]) -> list[MapVisit]:
+    """Place unread or unreliable maps from the maps visited before and after.
+
+    Something white behind the coordinates (a monster, a spell) can make
+    every reading fail or come out wrong. The map is then one of the cells
+    next to both neighbours; when there are two, the one matching part of
+    the OCR text wins. Placed maps are flagged "inferred". Returns them.
+    """
+    placed = []
+    for i in range(1, len(visits) - 1):
+        visit, prev, nxt = visits[i], visits[i - 1].coords, visits[i + 1].coords
+        if prev is None or nxt is None:
+            continue
+        unreliable = visit.coords is None or (
+            visit.source == "ocr" and visit.confidence < UNRELIABLE_SHARE
+            and not (_adjacent(visit.coords, prev) and _adjacent(visit.coords, nxt)))
+        if not unreliable:
+            continue
+        x, y = prev
+        options = [c for c in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)) if _adjacent(c, nxt)]
+        if len(options) > 1:
+            seen = _numbers(visit.ocr_texts)
+            scores = {c: (c[0] in seen) + (c[1] in seen) for c in options}
+            best = max(scores.values())
+            options = [c for c in options if scores[c] == best] if best else options
+        if len(options) == 1:
+            visit.coords, visit.source, visit.confidence = options[0], "inferred", 0.5
+            placed.append(visit)
+        elif visit.coords is not None:
+            # Two equally likely cells: drop the wrong reading, let exit-side inference decide.
+            visit.coords, visit.source, visit.confidence = None, None, 0.0
+    return placed

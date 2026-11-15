@@ -55,6 +55,8 @@ class MapVisit:
     coord_crops: list[np.ndarray] = field(default_factory=list)
 
     ocr_text: str = ""
+    # Raw text of every OCR reading, kept for partial matches when the vote fails.
+    ocr_texts: list[str] = field(default_factory=list)
     # Every value OCR read for this map, with its share of the readings.
     candidates: dict[tuple[int, int], float] = field(default_factory=dict)
     coords: tuple[int, int] | None = None
