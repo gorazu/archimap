@@ -1,6 +1,6 @@
 import pytest
 
-from archimap.ocr import OcrReading, parse_coords, read_coords, sample_evenly, tally, vote
+from archimap.ocr import OcrReading, parse_coords, read_coords, read_coords_many, sample_evenly, tally, vote
 from conftest import draw_coords, needs_tesseract, texture
 
 
@@ -68,3 +68,12 @@ def test_read_white_text_on_light_background():
 def test_tally_shares():
     readings = [OcrReading("a", (1, 2)), OcrReading("b", (1, 2)), OcrReading("c", (3, 4)), OcrReading("", None)]
     assert tally(readings) == {(1, 2): 0.5, (3, 4): 0.25}
+
+
+@needs_tesseract
+def test_read_coords_many_matches_one_by_one():
+    texts = ["[-5,12]", "", "[14,-3]", "[21,-8]"]
+    crops = [draw_coords(texture(i), t)[10:46, 10:160] for i, t in enumerate(texts)]
+    many = read_coords_many(crops)
+    assert [vote(rs)[0] for rs in many] == [(-5, 12), None, (14, -3), (21, -8)]
+    assert [[r.text for r in rs] for rs in many] == [[r.text for r in read_coords(c)] for c in crops]

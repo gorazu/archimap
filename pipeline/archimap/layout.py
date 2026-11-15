@@ -8,6 +8,7 @@ sized relative to that label.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 import cv2
@@ -58,16 +59,20 @@ def _find_border(profile: np.ndarray, lo: int, hi: int) -> int | None:
     return lo + max(0, peak - window) + int(strong[0]) + 1
 
 
-def distinct_frames(frames: list[np.ndarray], n: int, min_diff: float = 15.0) -> list[np.ndarray]:
+def distinct_frames(frames: Iterable[np.ndarray], n: int, min_diff: float = 15.0) -> list[np.ndarray]:
     """Up to n frames that each show a clearly different picture.
 
     Border detection takes a median over frames, so frames of one map seen
     many times would let that map's own edges pass for interface borders.
-    Dark (loading) frames are skipped.
+    Dark (loading) frames are skipped. Only kept frames stay in memory, so
+    a long stream (all keyframes of a video) can be passed.
     """
     picked: list[np.ndarray] = []
     smalls: list[np.ndarray] = []
+    first: list[np.ndarray] = []  # fallback if no frame qualifies
     for frame in frames:
+        if len(first) < n:
+            first.append(frame)
         small = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (64, 36),
                            interpolation=cv2.INTER_AREA).astype(np.float32)
         if small.mean() < 25 or any(np.abs(small - s).mean() < min_diff for s in smalls):
@@ -76,7 +81,7 @@ def distinct_frames(frames: list[np.ndarray], n: int, min_diff: float = 15.0) ->
         smalls.append(small)
         if len(picked) == n:
             break
-    return picked or frames[:n]
+    return picked or first
 
 
 def detect_game_area(frames: list[np.ndarray]) -> Box:

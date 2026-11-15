@@ -70,6 +70,31 @@ def iter_frames(path: Path, fps: float) -> Iterator[Frame]:
         proc.wait()
 
 
+def iter_keyframes(path: Path) -> Iterator[np.ndarray]:
+    """Only the keyframes (every few seconds), without decoding the frames between.
+
+    Much faster than iter_frames when only a sample spread over the video
+    is needed, as for layout detection.
+    """
+    info = probe(path)
+    frame_bytes = info.width * info.height * 3
+    proc = subprocess.Popen(
+        [
+            "ffmpeg", "-v", "error", "-skip_frame", "nokey", "-i", str(path),
+            "-fps_mode", "passthrough", "-f", "rawvideo", "-pix_fmt", "bgr24", "-",
+        ],
+        stdout=subprocess.PIPE,
+    )
+    assert proc.stdout is not None
+    try:
+        while len(buf := proc.stdout.read(frame_bytes)) == frame_bytes:
+            yield np.frombuffer(buf, np.uint8).reshape(info.height, info.width, 3)
+    finally:
+        proc.stdout.close()
+        proc.kill()
+        proc.wait()
+
+
 def grab_frame(path: Path, time: float, dest: Path) -> None:
     """Save a single frame at `time` seconds as an image file."""
     subprocess.run(

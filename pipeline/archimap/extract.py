@@ -13,17 +13,16 @@ import cv2
 
 from .dedupe import dedupe
 from .export import export_zone, update_zone_index
-from .frames import grab_frame, iter_frames, probe
+from .frames import grab_frame, iter_frames, iter_keyframes, probe
 from .infer import fill_coordinates, place_between_neighbours, resolve_with_route, route_links
 from .layout import detect_layout, distinct_frames
 from .models import Box, MapVisit
-from .ocr import TEXT_VARIANTS, read_coords, sample_evenly, tally, vote
+from .ocr import TEXT_VARIANTS, OcrReading, read_coords_many, sample_evenly, tally, vote
 from .report import write_report
 from .transitions import TransitionConfig, segment
 
 OCR_SAMPLES = 7
 LAYOUT_FRAMES = 12
-LAYOUT_CANDIDATES = 48
 
 
 def find_repo_root(start: Path) -> Path:
@@ -104,13 +103,13 @@ def save_preview(video: Path, time: float, dest: Path,
     cv2.imwrite(str(dest), image)
 
 
-def resolve_boxes(args: argparse.Namespace, duration: float) -> tuple[Box, Box]:
+def resolve_boxes(args: argparse.Namespace) -> tuple[Box, Box]:
     """Use the boxes given on the command line, detect the missing ones."""
     if args.view_box and args.coords_box:
         return args.view_box, args.coords_box
     # Frames of different maps spread over the video, for the median-based detection.
-    frames = [f.image for f in iter_frames(args.video, LAYOUT_CANDIDATES / max(duration, 1.0))]
-    layout = detect_layout(distinct_frames(frames, LAYOUT_FRAMES), game=args.view_box)
+    layout = detect_layout(distinct_frames(iter_keyframes(args.video), LAYOUT_FRAMES),
+                           game=args.view_box)
     view, coords = args.view_box or layout.game, args.coords_box or layout.coords
     if not args.view_box:
         print(f"  game area {view.x},{view.y},{view.w},{view.h} (detected)")
@@ -121,9 +120,7 @@ def resolve_boxes(args: argparse.Namespace, duration: float) -> tuple[Box, Box]:
     return view, coords
 
 
-def apply_ocr(visit: MapVisit, variants: tuple[tuple[float, int], ...]) -> None:
-    readings = [r for c in sample_evenly(visit.coord_crops, OCR_SAMPLES)
-                for r in read_coords(c, variants)]
+def apply_ocr(visit: MapVisit, readings: list[OcrReading]) -> None:
     coords, confidence, text = vote(readings)
     visit.ocr_text = text
     visit.ocr_texts = [r.text for r in readings]
@@ -146,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
 
     info = probe(args.video)
     print(f"{args.video.name}: {info.width}x{info.height}, {info.duration:.0f}s")
-    view_box, coords_box = resolve_boxes(args, info.duration)
+    view_box, coords_box = resolve_boxes(args)
 
     if args.preview is not None:
         dest = out_root / f"preview_{args.video.stem}.png"
@@ -163,10 +160,18 @@ def main(argv: list[str] | None = None) -> int:
 
     visits: list[MapVisit] = []
     for visit in segment(iter_frames(args.video, args.fps), cfg, view_box, coords_box):
-        apply_ocr(visit, variants)
+        visits.append(visit)
+        print(f"\r  reading the video: {visit.end_time:.0f}s / {info.duration:.0f}s",
+              end="", file=sys.stderr, flush=True)
+    print(file=sys.stderr)
+    # All coordinates at once: batched Tesseract runs are much faster.
+    samples = [sample_evenly(v.coord_crops, OCR_SAMPLES) for v in visits]
+    readings = read_coords_many([c for crops in samples for c in crops], variants)
+    for visit, crops in zip(visits, samples):
+        apply_ocr(visit, [r for rs in readings[:len(crops)] for r in rs])
+        readings = readings[len(crops):]
         coords = f"[{visit.coords[0]},{visit.coords[1]}]" if visit.coords else "?"
         print(f"  map {visit.index:3d}  {visit.start_time:7.1f}s–{visit.end_time:7.1f}s  {coords}")
-        visits.append(visit)
 
     if visits and visits[0].coords is None and args.start:
         visits[0].coords, visits[0].source, visits[0].confidence = args.start, "manual", 1.0

@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+import tempfile
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 import cv2
@@ -85,6 +89,62 @@ def read_coords(crop: np.ndarray,
     readings = [_tesseract(preprocess(crop, t, k)) for t, k in variants]
     if all(r.coords is None for r in readings):
         readings.append(_tesseract(preprocess(crop, None)))
+    return readings
+
+
+# Images per Tesseract run when reading many crops at once.
+BATCH_SIZE = 64
+
+
+def _tesseract_batch(images: list[np.ndarray]) -> list[str]:
+    """Text of each image, from a single Tesseract process.
+
+    Starting one process per image is the slow part (it dominated run time),
+    so images go through a list file; their texts come back separated by
+    form feeds.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        paths = []
+        for i, image in enumerate(images):
+            paths.append(os.path.join(tmp, f"{i}.png"))
+            cv2.imwrite(paths[-1], image)
+        listing = os.path.join(tmp, "list.txt")
+        with open(listing, "w") as f:
+            f.write("\n".join(paths) + "\n")
+        out = subprocess.run(
+            [pytesseract.pytesseract.tesseract_cmd, listing, "stdout", *TESS_CONFIG.split()],
+            capture_output=True, text=True, check=True,
+            # Batches run in parallel: one thread each avoids fighting for cores.
+            env={**os.environ, "OMP_THREAD_LIMIT": "1"},
+        ).stdout
+    pages = out.split("\f")
+    if len(pages) != len(images):
+        raise RuntimeError(f"Tesseract returned {len(pages)} pages for {len(images)} images")
+    return ["".join(page.split()) for page in pages]
+
+
+def _ocr_images(images: list[np.ndarray]) -> list[str]:
+    """Texts of many images: batched, with the batches spread over all cores."""
+    if not images:
+        return []
+    workers = os.cpu_count() or 4
+    size = max(1, min(BATCH_SIZE, -(-len(images) // workers)))
+    batches = [images[i:i + size] for i in range(0, len(images), size)]
+    with ThreadPoolExecutor(workers) as pool:
+        return [text for batch in pool.map(_tesseract_batch, batches) for text in batch]
+
+
+def read_coords_many(crops: list[np.ndarray],
+                     variants: tuple[tuple[float, int], ...] = TEXT_VARIANTS) -> list[list[OcrReading]]:
+    """read_coords for many crops at once, much faster than one by one."""
+    jobs = [(i, preprocess(crop, t, k)) for i, crop in enumerate(crops) for t, k in variants]
+    readings: list[list[OcrReading]] = [[] for _ in crops]
+    for (i, _), text in zip(jobs, _ocr_images([image for _, image in jobs])):
+        readings[i].append(OcrReading(text, parse_coords(text)))
+    # Otsu as a fallback where no binarization parsed, as in read_coords.
+    retry = [i for i, rs in enumerate(readings) if all(r.coords is None for r in rs)]
+    for i, text in zip(retry, _ocr_images([preprocess(crops[i], None) for i in retry])):
+        readings[i].append(OcrReading(text, parse_coords(text)))
     return readings
 
 
