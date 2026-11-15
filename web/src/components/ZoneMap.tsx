@@ -12,14 +12,19 @@ const STYLE_INFERRED: L.PathOptions = { ...STYLE_UNCHECKED, color: "#f0a030", op
 const STYLE_CHECKED: L.PathOptions = {
   color: "#5fd35f", weight: 3, opacity: 1, fillColor: "#2f8f2f", fillOpacity: 0.5,
 };
+const STYLE_CURRENT: L.PathOptions = {
+  color: "#4fc3ff", weight: 5, opacity: 1, fill: false, interactive: false, className: "current-map",
+};
 
 interface Props {
   zone: Zone;
   checked: CheckedSet;
   onToggle: (key: string) => void;
+  /** Map the player is on (live capture), highlighted and kept in view. */
+  current?: string | null;
 }
 
-export function ZoneMap({ zone, checked, onToggle }: Props) {
+export function ZoneMap({ zone, checked, onToggle, current }: Props) {
   const bounds = useMemo(() => zoneBounds(zone.maps, zone.tile_size), [zone]);
   return (
     <MapContainer
@@ -50,6 +55,7 @@ export function ZoneMap({ zone, checked, onToggle }: Props) {
           />
         );
       })}
+      {current && <CurrentMap key={current} zone={zone} current={current} />}
     </MapContainer>
   );
 }
@@ -77,6 +83,20 @@ function FitOnResize({ bounds }: { bounds: Bounds }) {
     };
   }, [map, bounds]);
   return null;
+}
+
+function CurrentMap({ zone, current }: { zone: Zone; current: string }) {
+  const map = useMap();
+  const bounds = useMemo(() => {
+    const entry = zone.maps.find((m) => mapKey(m.x, m.y) === current);
+    return entry ? tileBounds(entry.x, entry.y, zone.tile_size) : null;
+  }, [zone, current]);
+  useEffect(() => {
+    if (!bounds) return;
+    const tile = L.latLngBounds(bounds);
+    if (!map.getBounds().contains(tile)) map.panTo(tile.getCenter());
+  }, [map, bounds]);
+  return bounds ? <Rectangle bounds={bounds} pathOptions={STYLE_CURRENT} /> : null;
 }
 
 interface TileProps {

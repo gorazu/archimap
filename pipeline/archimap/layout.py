@@ -108,7 +108,8 @@ def find_coords_label(frame: np.ndarray, game: Box) -> Box | None:
                                                data["width"][i], data["height"][i])))
              for i, t in enumerate(data["text"]) if t.strip()]
     for i, (text, left, top, width, height) in enumerate(words):
-        if "oord" not in text.lower():
+        # Tolerant to misreads such as "Coaordonnées" or "Cordonnees".
+        if len(text) < 7 or "ord" not in text.lower():
             continue
         start = left + width
         for other, o_left, o_top, o_width, _ in words[i + 1:i + 3]:

@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "./components/Header";
+import { LivePanel } from "./components/LivePanel";
 import { ZoneMap } from "./components/ZoneMap";
 import { fetchZone, fetchZoneIndex, mapKey, type Zone, type ZoneSummary } from "./data/zones";
+import type { Coords } from "./live/ocr";
+import { isLiveCaptureSupported } from "./live/session";
+import { useLiveCapture } from "./live/useLiveCapture";
 import { useProgress } from "./progress/useProgress";
+
+const LIVE_SUPPORTED = isLiveCaptureSupported();
 
 const LAST_ZONE_KEY = "archimap:last-zone";
 
@@ -58,7 +64,20 @@ export function App() {
     };
   }, [slug]);
 
-  const { checked, toggle, reset } = useProgress(slug ?? "");
+  const { checked, toggle, check, reset } = useProgress(slug ?? "");
+
+  const zoneMaps = useMemo(() => new Set(zone?.maps.map((m) => mapKey(m.x, m.y))), [zone]);
+  const onPosition = useCallback(
+    ([x, y]: Coords) => {
+      const key = mapKey(x, y);
+      if (zoneMaps.has(key)) check(key);
+    },
+    [zoneMaps, check],
+  );
+  const live = useLiveCapture(zoneMaps, onPosition);
+  const [liveOpen, setLiveOpen] = useState(false);
+  const position = live.state.position;
+  const current = position ? mapKey(position[0], position[1]) : null;
 
   // Ignore stored keys for maps that are no longer in the zone.
   const checkedCount = useMemo(
@@ -83,6 +102,11 @@ export function App() {
         checkedCount={checkedCount}
         total={zone?.maps.length ?? 0}
         onNewHunt={onNewHunt}
+        live={
+          LIVE_SUPPORTED
+            ? { status: live.state.status, open: liveOpen, onToggle: () => setLiveOpen((open) => !open) }
+            : undefined
+        }
       />
       <main className="main">
         {error ? (
@@ -98,8 +122,9 @@ export function App() {
             </p>
           </div>
         ) : zone ? (
-          <ZoneMap zone={zone} checked={checked} onToggle={toggle} />
+          <ZoneMap zone={zone} checked={checked} onToggle={toggle} current={current} />
         ) : null}
+        {liveOpen && zone && <LivePanel live={live} zoneMaps={zoneMaps} onClose={() => setLiveOpen(false)} />}
       </main>
     </div>
   );

@@ -93,7 +93,7 @@ archimap/
 ## Tech stack
 
 - **Pipeline:** Python 3.11+, FFmpeg, OpenCV, Tesseract + pytesseract, Pillow, NumPy. Manage dependencies with `pyproject.toml`.
-- **Web:** React + TypeScript, Vite (dev server and build), Leaflet with `react-leaflet`, Tesseract.js (phase 3). Use **Bun** as the runtime and package manager (`bun install`, `bun run dev`, `bun run build`); no Node.js or npm.
+- **Web:** React + TypeScript, Vite (dev server and build), Leaflet with `react-leaflet`, Tesseract.js (phase 3, OCR engine and English data loaded from its CDN). Use **Bun** as the runtime and package manager (`bun install`, `bun run dev`, `bun run build`); no Node.js or npm.
 - **Tests:** pytest for the pipeline (transition detection, OCR parsing, coordinate inference); run the web manually or with Playwright later.
 
 ## Conventions
@@ -130,4 +130,7 @@ archimap/
   - OCR crops are resized to a fixed height (`OCR_HEIGHT`). Each crop is read with two binarizations (fixed threshold 160, and 0.7 × the crop's brightest text with thickened strokes), because each one fails at different sizes. When a map's vote is uncertain (< 75%), `resolve_with_route` picks the candidate next to the neighbouring maps.
   - Verified with no boxes given on the full-window clip (37/37 visits right) and on copies resized to 960x540, 1280x720, 1920x1080 and 2560x1440 (12/12 each, after the route check at 540p and 720p).
   - Phase 3 must port the same steps to the browser: game-area borders, label search, size normalization, two binarizations with voting, and the adjacency check (the current position must be next to the previous one).
+- Phase 3 live capture built (`web/src/live/`): `getDisplayMedia` window capture, layout detection ported from the pipeline (game-area borders over distinct frames, "Coordonnées" label search with Tesseract.js, size-normalized bicubic resize, two binarizations), about 2 reads per second, and `PositionTracker` (3 identical reads to confirm a move to an adjacent map, twice that for a non-adjacent jump). When the two readings disagree, it prefers the one adjacent to the current map, then one that is a map of the zone.
+  - Verified end to end by feeding the recorded clip as the capture stream (Playwright): 12/12 maps of the first 50 s checked in route order at 960x540, 1280x720, 1920x1080 and 2560x1440, with no false positives.
+  - Not built yet: the manual box picker and the thumbnail image-matching fallback. OCR plus automatic detection covers the tested setups.
 - Known issue: some tiles show monster-group tooltips, since hovering groups is how archimonsters are checked. The best-frame choice can't avoid them when they stay up for most of a visit.

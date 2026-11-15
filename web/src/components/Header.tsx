@@ -1,4 +1,5 @@
 import type { ZoneSummary } from "../data/zones";
+import type { LiveStatus } from "../live/session";
 
 interface Props {
   zones: ZoneSummary[];
@@ -7,9 +8,11 @@ interface Props {
   checkedCount: number;
   total: number;
   onNewHunt: () => void;
+  /** Live capture button, when the browser supports screen capture. */
+  live?: { status: LiveStatus; open: boolean; onToggle: () => void };
 }
 
-export function Header({ zones, current, onSelectZone, checkedCount, total, onNewHunt }: Props) {
+export function Header({ zones, current, onSelectZone, checkedCount, total, onNewHunt, live }: Props) {
   const done = total > 0 && checkedCount === total;
   const percent = total > 0 ? (checkedCount / total) * 100 : 0;
   return (
@@ -43,6 +46,18 @@ export function Header({ zones, current, onSelectZone, checkedCount, total, onNe
             <div className="progress-fill" style={{ width: `${percent}%` }} />
           </div>
         </div>
+      )}
+
+      {live && total > 0 && (
+        <button
+          type="button"
+          className={`live-toggle${live.open ? " open" : ""}`}
+          onClick={live.onToggle}
+          aria-pressed={live.open}
+        >
+          <span className={`live-dot ${live.status}`} aria-hidden="true" />
+          Direct
+        </button>
       )}
 
       {total > 0 && (

@@ -13,7 +13,8 @@ export function useProgress(zone: string) {
     (key: string) => store.set(zone, key, !store.get(zone).has(key)),
     [store, zone],
   );
+  const check = useCallback((key: string) => store.set(zone, key, true), [store, zone]);
   const reset = useCallback(() => store.reset(zone), [store, zone]);
 
-  return { checked, toggle, reset };
+  return { checked, toggle, check, reset };
 }
