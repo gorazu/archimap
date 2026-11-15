@@ -5,26 +5,26 @@ Interactive map of Dofus Retro underground zones, built from gameplay videos, fo
 ## Setup
 
 ```sh
-brew install uv ffmpeg tesseract
+brew install uv ffmpeg tesseract oven-sh/bun/bun
 cd pipeline && uv sync
+cd ../web && bun install
 ```
 
 ## Phase 1: video → map data
 
-Run from `pipeline/` (outputs go to `../web/public/data/` and `../out/`):
+Record the whole Dofus window (any size) with the **modern UI** option enabled. Run from `pipeline/` (outputs go to `../web/public/data/` and `../out/`):
 
 ```sh
-# 1. Save one frame with a pixel grid to find where the [x,y] coordinates are shown
-uv run python -m archimap.extract ../samples/clip.mp4 --preview 5
-
-# 2. Check the boxes on the preview (red = coords box, green = view box)
-uv run python -m archimap.extract ../samples/clip.mp4 --preview 5 \
-    --coords-box 20,40,160,30 --view-box 0,0,1280,860
-
-# 3. Run the pipeline
-uv run python -m archimap.extract ../samples/clip.mp4 --zone my-zone --name "My zone" \
-    --coords-box 20,40,160,30 --view-box 0,0,1280,860
+uv run python -m archimap.extract ../samples/clip.mkv --zone my-zone --name "My zone"
 ```
+
+The game area (left of the chat panel, above the UI bar) and the coordinates (next to the "Coordonnées" label) are found automatically at any capture size; the run prints the boxes it used. To check them on one frame first (red = coordinates, green = game area):
+
+```sh
+uv run python -m archimap.extract ../samples/clip.mkv --preview 5
+```
+
+If detection goes wrong on an unusual setup, set the boxes by hand with `--coords-box` and `--view-box` (pixels, `x,y,w,h`).
 
 Then open `out/my-zone/report.html` to review the detected maps. Maps with an orange border were placed by inference rather than OCR, so check those first.
 
@@ -32,11 +32,33 @@ Useful options:
 
 | Option | Purpose |
 | --- | --- |
-| `--coords-box X,Y,W,H` | Area showing the map coordinates. Without it, OCR is skipped. |
-| `--view-box X,Y,W,H` | Game area to keep in tiles. Also improves transition detection by ignoring the chat/UI. |
+| `--coords-box X,Y,W,H` | Area showing the coordinate numbers (default: found from the "Coordonnées" label). |
+| `--view-box X,Y,W,H` | Game area to keep in tiles (default: detected from the chat panel and UI bar borders). |
 | `--start X,Y` | Coordinates of the first map, if OCR can't read it. |
-| `--fps N` | Sampling rate (default 6). |
-| `--dark-mean`, `--uniform-std` | Loading-frame thresholds, if map changes are missed or over-detected. |
+| `--fps N` | Sampling rate (default 10). |
+| `--dark-mean`, `--uniform-std`, `--dip-ratio` | Loading-frame thresholds, if map changes are missed or over-detected. |
+| `--text-threshold N` | Read the coordinates with one fixed brightness threshold (0-255) instead of the default pair tuned for any capture size. |
 | `--cut-diff N` | Also split on big frame jumps without a loading frame (off by default). |
 
 Tests: `cd pipeline && uv run pytest`
+
+Each run also adds the zone to `web/public/data/zones.json`, which the web map reads to list the zones.
+
+## Phase 2: web map
+
+```sh
+cd web
+bun run dev        # http://localhost:5173
+bun run build      # static site in web/dist/, host it anywhere
+bun run test       # unit tests (progress store, tile geometry)
+```
+
+To try the map without a video, write three mock zones (and remove them later):
+
+```sh
+cd pipeline
+uv run python -m archimap.mock          # mock-grotte, mock-souterrain, mock-donjon
+uv run python -m archimap.mock --clean  # removes only the mock-* zones
+```
+
+Click or tap a map to mark it checked. Hover (desktop) or tap (mobile) shows its coordinates. Progress is saved in the browser per zone, and **Nouvelle chasse** clears it. The selected zone is kept in the URL (`#zone-slug`), so you can link to it.

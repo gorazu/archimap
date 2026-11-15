@@ -1,6 +1,6 @@
 import numpy as np
 
-from archimap.infer import edge_scores, exit_side, fill_coordinates
+from archimap.infer import edge_scores, exit_side, fill_coordinates, resolve_with_route
 from archimap.models import MapVisit
 from archimap.transitions import small_gray
 from conftest import texture, with_character
@@ -54,3 +54,21 @@ def test_fill_forward_and_backward():
     assert visits[2].coords == (4, 4)
     assert visits[3].coords == (5, 4)
     assert [v.source for v in visits] == ["inferred", "ocr", "inferred", "inferred"]
+
+
+def test_route_breaks_ocr_ties():
+    visits = [visit(0, coords=(-28, -56), source="ocr"),
+              visit(1, coords=(28, -57), source="ocr"),  # misread tied with the right value
+              visit(2, coords=(-28, -58), source="ocr")]
+    visits[1].confidence = 0.5
+    visits[1].candidates = {(28, -57): 0.5, (-28, -57): 0.5}
+    resolve_with_route(visits)
+    assert visits[1].coords == (-28, -57)
+
+
+def test_route_keeps_confident_votes():
+    visits = [visit(0, coords=(0, 0), source="ocr"), visit(1, coords=(5, 5), source="ocr")]
+    visits[1].candidates = {(5, 5): 0.9, (0, 1): 0.1}
+    visits[1].confidence = 0.9
+    resolve_with_route(visits)
+    assert visits[1].coords == (5, 5)

@@ -60,3 +60,14 @@ def export_zone(maps: list[MapVisit], zone: str, name: str, source_video: str,
     path = zone_dir / "zone.json"
     path.write_text(json.dumps(zone_json, indent=2, ensure_ascii=False) + "\n")
     return path
+
+
+def update_zone_index(data_dir: Path, zone: str, name: str, map_count: int) -> Path:
+    """Add or replace the zone's entry in zones.json, which lists zones for the web app."""
+    path = data_dir / "zones.json"
+    zones = json.loads(path.read_text())["zones"] if path.is_file() else []
+    zones = [z for z in zones if z["zone"] != zone]
+    zones.append({"zone": zone, "name": name, "maps": map_count})
+    zones.sort(key=lambda z: z["name"].casefold())
+    path.write_text(json.dumps({"zones": zones}, indent=2, ensure_ascii=False) + "\n")
+    return path

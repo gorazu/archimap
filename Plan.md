@@ -114,4 +114,20 @@ archimap/
 - Phase 1 pipeline built (`pipeline/archimap/`), tested on synthetic clips (`uv run pytest`, 32 tests).
   - Extra CLI options beyond the plan: `--view-box` (crop tiles to the game area), `--start x,y` (anchor the first map when OCR fails), `--preview SECONDS` (save a frame with a pixel grid to choose the boxes).
   - Map changes are detected from loading frames only. Splitting on hard cuts is off by default (`--cut-diff`), because big popups would split a visit. If the frames before and after a loading screen show the same map (fights, flashes), they stay one visit.
-- Next step: run it on the user's first short clip (5–10 maps), find the coords box with `--preview`, and tune the thresholds.
+- Phase 2 web map built (`web/`): React + TypeScript + Vite + react-leaflet, run with Bun. Checked on desktop and on a phone-sized viewport with demo data.
+  - The pipeline also writes `web/public/data/zones.json` (`{"zones": [{"zone", "name", "maps"}]}`), because a static site can't list folders.
+  - Progress goes through `progressStore` (localStorage, synced across tabs) and the `useProgress` hook. The store is provided through React context (`ProgressStoreContext`), so phase 4 only swaps the provider.
+  - Map tiles with `"source": "inferred"` get a dashed orange border and a "Position estimée" tooltip.
+  - Double-tap/double-click zoom is off, so quick taps on neighbouring maps don't zoom in.
+- Real clips of the Égouts de Bonta, all maps read by OCR and every step of the route moves exactly one map:
+  - `samples/egouts-de-bonta.mkv` (cropped to the game area): 29 visits → 25 maps, `--coords-box 245,80,180,40`.
+  - `samples/egouts-de-bonta-window.mkv` (full Dofus window, 1920x1080) is now the standard recording setup: 37 visits → 32 maps with `--coords-box 175,58,150,34 --view-box 0,0,1371,837`. Live mode (phase 3) can reuse these boxes.
+  - OCR keeps near-white text pixels (`--text-threshold`, default 185), thickens the strokes, and falls back to Otsu; Otsu alone failed on light walls. Confidence is the share of sampled frames that agree, because Tesseract reports 0 for correct text when the character set is restricted.
+  - Loading fades can be very short (~0.15 s fully dark), so a frame much darker than the visit's recent brightness also counts as loading (`--dip-ratio 0.6`), and the default sampling rate is now 10 fps.
+- Any capture size (requires the **modern UI** option in Dofus Retro, which scales the interface evenly). `archimap/layout.py`:
+  - The game area is found from the chat panel and UI bar borders, using the median edge strength over frames of different maps.
+  - The coordinates box is sized from the "Coordonnées" label found by OCR in the top-left corner of the game area. If the label isn't found, a default position relative to the game area is used.
+  - OCR crops are resized to a fixed height (`OCR_HEIGHT`). Each crop is read with two binarizations (fixed threshold 160, and 0.7 × the crop's brightest text with thickened strokes), because each one fails at different sizes. When a map's vote is uncertain (< 75%), `resolve_with_route` picks the candidate next to the neighbouring maps.
+  - Verified with no boxes given on the full-window clip (37/37 visits right) and on copies resized to 960x540, 1280x720, 1920x1080 and 2560x1440 (12/12 each, after the route check at 540p and 720p).
+  - Phase 3 must port the same steps to the browser: game-area borders, label search, size normalization, two binarizations with voting, and the adjacency check (the current position must be next to the previous one).
+- Known issue: some tiles show monster-group tooltips, since hovering groups is how archimonsters are checked. The best-frame choice can't avoid them when they stay up for most of a visit.

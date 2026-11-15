@@ -1,7 +1,7 @@
 import json
 
 from archimap.dedupe import dedupe
-from archimap.export import export_zone
+from archimap.export import export_zone, update_zone_index
 from archimap.models import MapVisit
 from conftest import texture
 
@@ -43,3 +43,14 @@ def test_export_replaces_stale_tiles(tmp_path):
     export_zone([visit(0, (0, 0), "ocr")], "z", "z", "a.mp4", tmp_path)
     export_zone([visit(1, (1, 1), "ocr")], "z", "z", "b.mp4", tmp_path)
     assert [p.name for p in (tmp_path / "z" / "tiles").iterdir()] == ["1_1.webp"]
+
+
+def test_update_zone_index(tmp_path):
+    update_zone_index(tmp_path, "b", "Zone B", 3)
+    update_zone_index(tmp_path, "a", "zone A", 5)
+    update_zone_index(tmp_path, "b", "Zone B", 4)
+    data = json.loads((tmp_path / "zones.json").read_text())
+    assert data == {"zones": [
+        {"zone": "a", "name": "zone A", "maps": 5},
+        {"zone": "b", "name": "Zone B", "maps": 4},
+    ]}

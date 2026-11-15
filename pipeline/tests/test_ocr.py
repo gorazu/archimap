@@ -1,6 +1,6 @@
 import pytest
 
-from archimap.ocr import OcrReading, parse_coords, read_coords, sample_evenly, vote
+from archimap.ocr import OcrReading, parse_coords, read_coords, sample_evenly, tally, vote
 from conftest import draw_coords, needs_tesseract, texture
 
 
@@ -23,19 +23,19 @@ def test_parse_coords_rejects(text):
 
 def test_vote_majority():
     readings = [
-        OcrReading("[-5,12]", (-5, 12), 0.9),
-        OcrReading("[-5,12]", (-5, 12), 0.8),
-        OcrReading("[-6,12]", (-6, 12), 0.9),
-        OcrReading("", None, 0.0),
+        OcrReading("[-5,12]", (-5, 12)),
+        OcrReading("[-5,12]", (-5, 12)),
+        OcrReading("[-6,12]", (-6, 12)),
+        OcrReading("", None),
     ]
     coords, confidence, text = vote(readings)
     assert coords == (-5, 12)
     assert text == "[-5,12]"
-    assert confidence == pytest.approx(0.5 * 0.85)
+    assert confidence == pytest.approx(0.5)
 
 
 def test_vote_nothing_parsed():
-    assert vote([OcrReading("??", None, 0.1)])[0] is None
+    assert vote([OcrReading("??", None)])[0] is None
     assert vote([]) == (None, 0.0, "")
 
 
@@ -49,4 +49,22 @@ def test_sample_evenly():
 def test_read_coords_rendered(text, expected):
     frame = draw_coords(texture(1), text)
     crop = frame[10:46, 10:160]
-    assert read_coords(crop).coords == expected
+    assert vote(read_coords(crop))[0] == expected
+
+
+@needs_tesseract
+def test_read_white_text_on_light_background():
+    """Otsu fails here: the background is nearly as bright as the text."""
+    import cv2
+    import numpy as np
+    crop = np.full((40, 180, 3), (150, 175, 190), np.uint8)
+    cv2.rectangle(crop, (0, 25), (180, 40), (40, 60, 70), -1)
+    cv2.line(crop, (0, 40), (180, 0), (60, 80, 90), 6)
+    for color, width in (((20, 20, 20), 5), ((245, 245, 245), 2)):
+        cv2.putText(crop, "-26, -55", (8, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, width, cv2.LINE_AA)
+    assert vote(read_coords(crop))[0] == (-26, -55)
+
+
+def test_tally_shares():
+    readings = [OcrReading("a", (1, 2)), OcrReading("b", (1, 2)), OcrReading("c", (3, 4)), OcrReading("", None)]
+    assert tally(readings) == {(1, 2): 0.5, (3, 4): 0.25}

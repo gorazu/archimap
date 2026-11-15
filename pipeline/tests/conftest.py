@@ -12,6 +12,12 @@ def texture(seed: int, w: int = 320, h: int = 180) -> np.ndarray:
     return cv2.resize(blocks, (w, h), interpolation=cv2.INTER_NEAREST)
 
 
+def shifted_texture(seed: int, w: int, h: int) -> np.ndarray:
+    """Map content that, unlike interface borders, moves between maps."""
+    rng = np.random.default_rng(seed + 100)
+    return np.roll(texture(seed, w, h), (int(rng.integers(0, 8)), int(rng.integers(0, 8))), (0, 1))
+
+
 def with_character(image: np.ndarray, x: int, y: int, size: int = 14) -> np.ndarray:
     out = image.copy()
     cv2.rectangle(out, (x, y), (x + size, y + size), (255, 0, 255), -1)

@@ -54,3 +54,13 @@ def test_view_and_coords_boxes():
     assert visit.image.shape[:2] == (50, 100)
     assert len(visit.coord_crops) == 3
     assert visit.coord_crops[0].shape[:2] == (20, 40)
+
+
+def test_splits_on_partial_fade():
+    """Short fades where no sampled frame is fully dark still split visits."""
+    fade = (texture(1) * 0.45).astype("uint8")
+    images = [texture(1)] * 4 + [fade] + [texture(2)] * 4
+    assert texture(1).mean() * 0.45 > CFG.dark_mean  # not caught by dark_mean alone
+    assert len(list(segment(frames_from(images), CFG))) == 2
+    no_dips = TransitionConfig(dip_ratio=0)
+    assert len(list(segment(frames_from(images), no_dips))) == 1

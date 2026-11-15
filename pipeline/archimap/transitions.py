@@ -21,6 +21,10 @@ class TransitionConfig:
     dark_mean: float = 25.0
     # Gray std below which a frame counts as near-uniform (loading screen).
     uniform_std: float = 8.0
+    # A frame darker than this fraction of the current visit's recent
+    # brightness is part of a loading fade. Catches short fades where no
+    # sampled frame gets fully dark. 0 disables it.
+    dip_ratio: float = 0.6
     # Mean abs difference between consecutive small frames that counts as a
     # hard cut, for map changes without a dark transition. 0 disables it:
     # large popups would otherwise split a visit.
@@ -45,6 +49,13 @@ def small_gray(image: np.ndarray) -> np.ndarray:
 
 def is_loading(small: np.ndarray, cfg: TransitionConfig) -> bool:
     return float(small.mean()) < cfg.dark_mean or float(small.std()) < cfg.uniform_std
+
+
+def is_dip(small: np.ndarray, recent: list[np.ndarray], cfg: TransitionConfig) -> bool:
+    if cfg.dip_ratio <= 0 or not recent:
+        return False
+    baseline = float(np.median([s.mean() for s in recent]))
+    return float(small.mean()) < baseline * cfg.dip_ratio
 
 
 def frame_diff(a: np.ndarray, b: np.ndarray) -> float:
@@ -130,7 +141,8 @@ def segment(frames: Iterable[Frame], cfg: TransitionConfig,
     for frame in frames:
         view = view_box.crop(frame.image) if view_box else frame.image
         small = small_gray(view)
-        if is_loading(small, cfg):
+        recent = builder.smalls[-12:] if builder is not None else []
+        if is_loading(small, cfg) or is_dip(small, recent, cfg):
             # Keep the visit open until we see what comes after the loading.
             loading_seen = True
             continue

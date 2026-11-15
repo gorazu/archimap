@@ -9,7 +9,7 @@ from pathlib import Path
 import cv2
 
 from .models import MapVisit
-from .ocr import preprocess
+from .ocr import TEXT_VARIANTS, preprocess
 
 PREVIEW_WIDTH = 320
 
@@ -26,7 +26,8 @@ def _fmt_time(t: float) -> str:
 
 
 def write_report(visits: list[MapVisit], kept: list[MapVisit], zone: str,
-                 video: str, out_dir: Path) -> Path:
+                 video: str, out_dir: Path,
+                 text_variant: tuple[float, int] = TEXT_VARIANTS[0]) -> Path:
     assets = out_dir / "assets"
     shutil.rmtree(assets, ignore_errors=True)
     assets.mkdir(parents=True)
@@ -38,7 +39,7 @@ def write_report(visits: list[MapVisit], kept: list[MapVisit], zone: str,
         crop_cells = "<td>—</td><td>—</td>"
         if v.coord_crops:
             _save(v.coord_crops[0], assets / f"coords_{v.index}.png")
-            _save(preprocess(v.coord_crops[0]), assets / f"coords_{v.index}_bin.png")
+            _save(preprocess(v.coord_crops[0], *text_variant), assets / f"coords_{v.index}_bin.png")
             crop_cells = (f'<td><img class="crop" src="assets/coords_{v.index}.png"></td>'
                           f'<td><img class="crop" src="assets/coords_{v.index}_bin.png"></td>')
         coords = f"[{v.coords[0]},{v.coords[1]}]" if v.coords else "—"

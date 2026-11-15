@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 
 from archimap.extract import main
-from conftest import black, draw_coords, needs_ffmpeg, needs_tesseract, texture, with_character
+from conftest import black, draw_coords, needs_ffmpeg, needs_tesseract, shifted_texture, with_character
 
 W, H, FPS = 640, 360, 12
 
@@ -14,7 +14,7 @@ def write_video(path, maps):
     (start_xy, end_xy) of the character over the last second, or None."""
     writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), FPS, (W, H))
     for i, (seed, text, motion, entry) in enumerate(maps):
-        bg = draw_coords(texture(seed, W, H), text)
+        bg = draw_coords(shifted_texture(seed, W, H), text)
         n = FPS * 2
         for f in range(n):
             frame = bg
@@ -57,6 +57,8 @@ def test_end_to_end(tmp_path):
     assert placed == {(-5, 12): "ocr", (-4, 12): "ocr", (-3, 12): "inferred"}
     assert zone["tile_size"] == [W, H]
     assert (out_dir / "e2e" / "report.html").is_file()
+    index = json.loads((data_dir / "zones.json").read_text())
+    assert index == {"zones": [{"zone": "e2e", "name": "e2e", "maps": 3}]}
 
 
 @needs_ffmpeg

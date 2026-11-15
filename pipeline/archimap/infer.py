@@ -10,6 +10,8 @@ SIDES = ("left", "right", "top", "bottom")
 # In-game y grows downward.
 DELTA = {"left": (-1, 0), "right": (1, 0), "top": (0, -1), "bottom": (0, 1)}
 OPPOSITE = {"left": "right", "right": "left", "top": "bottom", "bottom": "top"}
+# OCR votes below this share are checked against the route.
+AMBIGUOUS_SHARE = 0.75
 
 
 def motion_mask(smalls: list[np.ndarray], threshold: float = 25.0) -> np.ndarray | None:
@@ -80,3 +82,28 @@ def fill_coordinates(visits: list[MapVisit]) -> None:
             cur.coords = (nxt.coords[0] - dx, nxt.coords[1] - dy)
             cur.source = "inferred"
             cur.confidence = cur.exit_score
+
+
+def _adjacent(a: tuple[int, int], b: tuple[int, int]) -> bool:
+    return abs(a[0] - b[0]) + abs(a[1] - b[1]) == 1
+
+
+def resolve_with_route(visits: list[MapVisit]) -> None:
+    """For uncertain OCR votes, prefer the candidate next to the neighbouring maps.
+
+    Walking moves one map at a time, so consecutive visits are adjacent. A
+    misread that wins (or ties) the vote usually breaks that.
+    """
+    for i, visit in enumerate(visits):
+        if (visit.source != "ocr" or visit.confidence >= AMBIGUOUS_SHARE
+                or len(visit.candidates) < 2):
+            continue
+        neighbours = [v.coords for v in visits[max(0, i - 1):i + 2]
+                      if v is not visit and v.coords is not None]
+
+        def fit(coords: tuple[int, int]) -> int:
+            return sum(_adjacent(coords, n) for n in neighbours)
+
+        best = max(visit.candidates, key=lambda c: (fit(c), visit.candidates[c]))
+        if fit(best) > fit(visit.coords):
+            visit.coords, visit.confidence = best, visit.candidates[best]
