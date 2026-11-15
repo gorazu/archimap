@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { tileBounds, tileWidth, zoneBounds } from "./geometry";
+import { corridorBounds, tileBounds, tileCenter, tileWidth, zoneBounds } from "./geometry";
 
 test("tile width keeps the aspect ratio", () => {
   expect(tileWidth([1280, 800])).toBe(160);
@@ -14,4 +14,10 @@ test("y grows downward: a larger y is lower on the map", () => {
 test("zone bounds cover every tile", () => {
   const maps = [{ x: -2, y: 3 }, { x: 1, y: 5 }];
   expect(zoneBounds(maps, [200, 100])).toEqual([[-600, -400], [-300, 400]]);
+});
+
+test("corridors join the centres of two maps", () => {
+  expect(tileCenter(0, 0, [200, 100])).toEqual([-50, 100]);
+  expect(corridorBounds([0, 0], [1, 0], [200, 100])).toEqual([[-59, 91], [-41, 309]]);
+  expect(corridorBounds([0, 1], [0, 0], [200, 100])).toEqual([[-159, 91], [-41, 109]]);
 });

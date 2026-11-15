@@ -61,6 +61,8 @@ uv run python -m archimap.mock          # mock-grotte, mock-souterrain, mock-don
 uv run python -m archimap.mock --clean  # removes only the mock-* zones
 ```
 
+The map opens as a **plan**: one drawn tile per map, with corridors for the passages walked in the recording (saved as `links` in `zone.json`). **Photos** switches to the captured screenshots.
+
 Click or tap a map to mark it checked. Hover (desktop) or tap (mobile) shows its coordinates. Progress is saved in the browser per zone, and **Nouvelle chasse** clears it. The selected zone is kept in the URL (`#zone-slug`), so you can link to it.
 
 ## Phase 3: live capture

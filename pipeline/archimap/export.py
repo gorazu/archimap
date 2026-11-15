@@ -19,8 +19,12 @@ def to_pil(image) -> Image.Image:
 
 
 def export_zone(maps: list[MapVisit], zone: str, name: str, source_video: str,
-                data_dir: Path, quality: int = 80) -> Path:
-    """Replace the zone's tiles and thumbs and write zone.json."""
+                data_dir: Path, quality: int = 80,
+                links: list[tuple[tuple[int, int], tuple[int, int]]] = ()) -> Path:
+    """Replace the zone's tiles and thumbs and write zone.json.
+
+    `links` are the passages between maps, drawn as corridors on the web plan.
+    """
     zone_dir = data_dir / zone
     for sub in ("tiles", "thumbs"):
         shutil.rmtree(zone_dir / sub, ignore_errors=True)
@@ -56,6 +60,7 @@ def export_zone(maps: list[MapVisit], zone: str, name: str, source_video: str,
         "source_video": source_video,
         "tile_size": tile_size,
         "maps": entries,
+        "links": [[a[0], a[1], b[0], b[1]] for a, b in links],
     }
     path = zone_dir / "zone.json"
     path.write_text(json.dumps(zone_json, indent=2, ensure_ascii=False) + "\n")

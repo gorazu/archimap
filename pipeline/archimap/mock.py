@@ -118,7 +118,9 @@ def write_mock_zones(data_dir: Path) -> list[str]:
                 sharpness=1.0, head=[], tail=[], coords=(cx, cy), source=source,
                 confidence=0.92 if source == "ocr" else 0.5,
             ))
-        export_zone(maps, slug, name, "mock.mp4", data_dir)
+        links = sorted({tuple(sorted(((cx, cy), n))) for cx, cy, _ in cells
+                        for n in ((cx + 1, cy), (cx, cy + 1)) if n in coords})
+        export_zone(maps, slug, name, "mock.mp4", data_dir, links=links)
         update_zone_index(data_dir, slug, name, len(maps))
         written.append(f"{slug} ({len(maps)} maps)")
     return written

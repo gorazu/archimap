@@ -1,6 +1,6 @@
 import numpy as np
 
-from archimap.infer import edge_scores, exit_side, fill_coordinates, resolve_with_route
+from archimap.infer import edge_scores, exit_side, fill_coordinates, resolve_with_route, route_links
 from archimap.models import MapVisit
 from archimap.transitions import small_gray
 from conftest import texture, with_character
@@ -72,3 +72,11 @@ def test_route_keeps_confident_votes():
     visits[1].confidence = 0.9
     resolve_with_route(visits)
     assert visits[1].coords == (5, 5)
+
+
+def test_route_links_from_consecutive_adjacent_visits():
+    visits = [visit(0, coords=(0, 0), source="ocr"), visit(1, coords=(1, 0), source="ocr"),
+              visit(2, coords=(0, 0), source="ocr"),  # back again: same link
+              visit(3, coords=(5, 5), source="ocr"),  # teleport: no link
+              visit(4), visit(5, coords=(5, 6), source="ocr")]
+    assert route_links(visits) == [((0, 0), (1, 0))]

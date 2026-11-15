@@ -28,3 +28,19 @@ export function zoneBounds(maps: { x: number; y: number }[], size: [number, numb
     [-Math.min(...ys) * TILE_HEIGHT, (Math.max(...xs) + 1) * tw],
   ];
 }
+
+export function tileCenter(x: number, y: number, size: [number, number]): [number, number] {
+  const tw = tileWidth(size);
+  return [-(y + 0.5) * TILE_HEIGHT, (x + 0.5) * tw];
+}
+
+/** Corridor between two neighbouring maps' centres, as a band in map units. */
+export function corridorBounds(a: [number, number], b: [number, number], size: [number, number]): Bounds {
+  const half = TILE_HEIGHT * 0.09;
+  const [ay, ax] = tileCenter(a[0], a[1], size);
+  const [by, bx] = tileCenter(b[0], b[1], size);
+  return [
+    [Math.min(ay, by) - half, Math.min(ax, bx) - half],
+    [Math.max(ay, by) + half, Math.max(ax, bx) + half],
+  ];
+}

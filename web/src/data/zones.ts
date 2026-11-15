@@ -24,6 +24,22 @@ export interface Zone {
   source_video: string;
   tile_size: [number, number];
   maps: MapEntry[];
+  /** Passages between maps as [x1, y1, x2, y2], from the recorded route. Missing in older data. */
+  links?: [number, number, number, number][];
+}
+
+/**
+ * Passages to draw on the plan. Older zone files have no links: then every
+ * pair of neighbouring maps is assumed to connect.
+ */
+export function zoneLinks(zone: Zone): [number, number, number, number][] {
+  if (zone.links) return zone.links;
+  const keys = new Set(zone.maps.map((m) => mapKey(m.x, m.y)));
+  return zone.maps.flatMap((m) =>
+    [[m.x + 1, m.y], [m.x, m.y + 1]]
+      .filter(([x, y]) => keys.has(mapKey(x, y)))
+      .map(([x, y]) => [m.x, m.y, x, y] as [number, number, number, number]),
+  );
 }
 
 export function dataUrl(path: string): string {

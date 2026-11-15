@@ -14,7 +14,7 @@ import cv2
 from .dedupe import dedupe
 from .export import export_zone, update_zone_index
 from .frames import grab_frame, iter_frames, probe
-from .infer import fill_coordinates, resolve_with_route
+from .infer import fill_coordinates, resolve_with_route, route_links
 from .layout import detect_layout, distinct_frames
 from .models import Box, MapVisit
 from .ocr import TEXT_VARIANTS, read_coords, sample_evenly, tally, vote
@@ -180,7 +180,8 @@ def main(argv: list[str] | None = None) -> int:
 
     data_dir = args.data_dir or root / "web" / "public" / "data"
     name = args.name or args.zone
-    zone_json = export_zone(maps, args.zone, name, args.video.name, data_dir)
+    zone_json = export_zone(maps, args.zone, name, args.video.name, data_dir,
+                            links=route_links(visits))
     update_zone_index(data_dir, args.zone, name, len(maps))
     report = write_report(visits, maps, args.zone, args.video.name, out_root / args.zone,
                           variants[0])

@@ -107,3 +107,16 @@ def resolve_with_route(visits: list[MapVisit]) -> None:
         best = max(visit.candidates, key=lambda c: (fit(c), visit.candidates[c]))
         if fit(best) > fit(visit.coords):
             visit.coords, visit.confidence = best, visit.candidates[best]
+
+
+def route_links(visits: list[MapVisit]) -> list[tuple[tuple[int, int], tuple[int, int]]]:
+    """Passages the player actually took: consecutive visits to adjacent maps.
+
+    Two neighbouring maps aren't always connected (walls), so the route is
+    a better source for the map's corridors than adjacency alone.
+    """
+    links = set()
+    for a, b in zip(visits, visits[1:]):
+        if a.coords and b.coords and _adjacent(a.coords, b.coords):
+            links.add(tuple(sorted((a.coords, b.coords))))
+    return sorted(links)

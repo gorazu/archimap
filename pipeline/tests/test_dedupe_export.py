@@ -26,8 +26,10 @@ def test_dedupe_prefers_ocr_then_confidence_then_sharpness():
 
 def test_export_zone(tmp_path):
     maps = [visit(0, (-5, 12), "ocr", 0.87654), visit(1, (-4, 12), "inferred", 0.4)]
-    path = export_zone(maps, "test-zone", "Test zone", "clip.mp4", tmp_path)
+    path = export_zone(maps, "test-zone", "Test zone", "clip.mp4", tmp_path,
+                       links=[((-5, 12), (-4, 12))])
     data = json.loads(path.read_text())
+    assert data["links"] == [[-5, 12, -4, 12]]
     assert data["zone"] == "test-zone"
     assert data["tile_size"] == [320, 180]
     assert data["maps"][0] == {
