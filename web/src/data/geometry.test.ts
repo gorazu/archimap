@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { edgePoint, segmentPolygon, tileBounds, tilePoint, tileWidth, zoneBounds } from "./geometry";
+import { tileBounds, tilePoint, tileWidth, zoneBounds } from "./geometry";
 
 test("tile width keeps the aspect ratio", () => {
   expect(tileWidth([1280, 800])).toBe(160);
@@ -16,14 +16,6 @@ test("zone bounds cover every tile", () => {
   expect(zoneBounds(maps, [200, 100])).toEqual([[-600, -400], [-300, 400]]);
 });
 
-test("points inside tiles and on shared edges", () => {
+test("points inside tiles", () => {
   expect(tilePoint(1, 2, [0.5, 0.25], [200, 100])).toEqual([-225, 300]);
-  expect(edgePoint([0, 0], [1, 0], 0.25, [200, 100])).toEqual([-25, 200]); // right edge, a quarter down
-  expect(edgePoint([0, 0], [0, 1], 0.5, [200, 100])).toEqual([-100, 100]); // bottom edge, middle
-});
-
-test("corridor segments are bands around the line", () => {
-  const band = segmentPolygon([0, 0], [0, 10], 2);
-  // A band 2 units either side of the line from (0, 0) to (0, 10).
-  expect(band).toEqual([[-2, 0], [-2, 10], [2, 10], [2, 0]]);
 });

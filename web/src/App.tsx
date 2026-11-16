@@ -11,6 +11,15 @@ import { ProgressStoreContext, useProgress } from "./progress/useProgress";
 const LIVE_SUPPORTED = isLiveCaptureSupported();
 
 const LAST_ZONE_KEY = "archimap:last-zone";
+const SHOW_PATHS_KEY = "archimap:show-paths";
+
+function initialShowPaths(): boolean {
+  try {
+    return localStorage.getItem(SHOW_PATHS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
 
 function rememberZone(slug: string) {
   try {
@@ -40,6 +49,15 @@ export function App() {
   // Every zone is loaded up front: live capture needs them all to tell where the player is.
   const [zoneData, setZoneData] = useState<Map<string, Zone> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showPaths, setShowPaths] = useState(initialShowPaths);
+  const changeShowPaths = useCallback((show: boolean) => {
+    setShowPaths(show);
+    try {
+      localStorage.setItem(SHOW_PATHS_KEY, String(show));
+    } catch {
+      // Not important if it can't be stored.
+    }
+  }, []);
 
   useEffect(() => {
     fetchZoneIndex()
@@ -147,7 +165,14 @@ export function App() {
             </p>
           </div>
         ) : zone ? (
-          <ZoneMap zone={zone} checked={checked} onToggle={toggle} current={current} />
+          <ZoneMap
+            zone={zone}
+            checked={checked}
+            onToggle={toggle}
+            current={current}
+            showPaths={showPaths}
+            onShowPathsChange={changeShowPaths}
+          />
         ) : null}
         {liveOpen && zone && (
           <LivePanel

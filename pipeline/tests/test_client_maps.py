@@ -118,3 +118,26 @@ def test_layout_packs_three_cells_per_character():
     alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
     first = alphabet.index(layout["cells"][0])
     assert (first % 4, first // 4 % 4, first // 16) == (1, 3, 2)  # wall, sun, floor
+
+
+def test_routes_follow_the_floor_around_a_wall():
+    # A wall across the middle with a gap at the bottom: the route from the top-left
+    # sun to the top-right sun must go down through the gap.
+    wall = {(x, y): cell(WALL) for x in (13, 14, 15) for y in range(0, 25) if (x + y) % 2 == 0}
+    suns = {(6, 0): cell(SUN), (22, 0): cell(SUN)}
+    (area,) = map_areas(variables({**wall, **suns}))
+    (route,) = area.paths
+    assert route[0] in ((round(6 / 28, 3), 0.0), (round(22 / 28, 3), 0.0))
+    assert max(v for _, v in route) > 24 / 32  # went below the wall
+
+
+def test_single_exit_part_gets_a_dead_end_route():
+    (area,) = map_areas(variables({(14, 0): cell(SUN)}))
+    assert len(area.paths) == 1 and len(area.paths[0]) >= 2
+
+
+def test_passages_record_the_suns_on_each_side():
+    areas = {(0, 0): [Area((0.5, 0.5), [Exit("right", 0.4, uv=(0.97, 0.4))])],
+             (1, 0): [Area((0.5, 0.5), [Exit("left", 0.03, uv=(0.03, 0.03))])]}
+    (p,) = passages_between(areas)
+    assert (p.ua, p.ub) == ((0.97, 0.4), (0.03, 0.03))

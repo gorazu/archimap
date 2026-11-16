@@ -1,6 +1,6 @@
 import L from "leaflet";
 import { memo, useEffect, useMemo } from "react";
-import { Circle, ImageOverlay, MapContainer, Marker, Pane, Polygon, Rectangle, Tooltip, useMap, useMapEvent } from "react-leaflet";
+import { Circle, ImageOverlay, MapContainer, Marker, Pane, Polyline, Rectangle, Tooltip, useMap, useMapEvent } from "react-leaflet";
 import { TILE_HEIGHT, tileBounds, tileWidth, zoneBounds, type Bounds } from "../data/geometry";
 import { drawLayout } from "../data/layout";
 import { planShapes } from "../data/plan";
@@ -16,8 +16,12 @@ const STYLE_CHECKED: L.PathOptions = {
 };
 // Drawn tiles, like the mock zones.
 const PLAN_TILE: L.PathOptions = { stroke: false, fillColor: "#2b241b", fillOpacity: 1, interactive: false };
-// Light and see-through, so they stand out from the map layouts underneath.
-const PLAN_CORRIDOR: L.PathOptions = { stroke: false, fillColor: "#f1e4c2", fillOpacity: 0.6, interactive: false };
+// Light lines that stand out from the map layouts underneath: walking routes
+// solid, map changes dashed. Widths in screen pixels, whatever the zoom.
+const PLAN_ROUTE: L.PathOptions = {
+  color: "#f1e4c2", weight: 3, opacity: 0.8, lineCap: "round", lineJoin: "round", interactive: false,
+};
+const PLAN_CROSSING: L.PathOptions = { ...PLAN_ROUTE, dashArray: "1 7" };
 const PLAN_NODE: L.PathOptions = { stroke: false, fillColor: "#f1e4c2", fillOpacity: 0.85, interactive: false };
 // Leaflet stacks a pane's shapes (svg, z-index 200) above its images (1 by
 // default): raise the map layouts above their tile backgrounds.
@@ -35,47 +39,60 @@ interface Props {
   onToggle: (key: string) => void;
   /** Map the player is on (live capture), highlighted and kept in view. */
   current?: string | null;
+  /** Draw the paths (walking routes and map changes). */
+  showPaths: boolean;
+  onShowPathsChange: (show: boolean) => void;
 }
 
-export function ZoneMap({ zone, checked, onToggle, current }: Props) {
+export function ZoneMap({ zone, checked, onToggle, current, showPaths, onShowPathsChange }: Props) {
   const bounds = useMemo(() => zoneBounds(zone.maps, zone.tile_size), [zone]);
   return (
-    <MapContainer
-      key={zone.zone}
-      className="map"
-      crs={L.CRS.Simple}
-      bounds={bounds}
-      boundsOptions={{ padding: [24, 24] }}
-      minZoom={-4}
-      maxZoom={3}
-      zoomSnap={0.25}
-      zoomDelta={0.5}
-      wheelPxPerZoomLevel={120}
-      // Quick taps on neighbouring maps would otherwise zoom in.
-      doubleClickZoom={false}
-      attributionControl={false}
+    <>
+      <MapContainer
+        key={zone.zone}
+        className="map"
+        crs={L.CRS.Simple}
+        bounds={bounds}
+        boundsOptions={{ padding: [24, 24] }}
+        minZoom={-4}
+        maxZoom={3}
+        zoomSnap={0.25}
+        zoomDelta={0.5}
+        wheelPxPerZoomLevel={120}
+        // Quick taps on neighbouring maps would otherwise zoom in.
+        doubleClickZoom={false}
+        attributionControl={false}
+      >
+        <FitOnResize bounds={bounds} />
+        <PlanLayer zone={zone} showPaths={showPaths} />
+        {zone.maps.map((entry) => {
+          const key = mapKey(entry.x, entry.y);
+          return (
+            <MapTile
+              key={key}
+              zone={zone}
+              entry={entry}
+              checked={checked.has(key)}
+              onToggle={onToggle}
+            />
+          );
+        })}
+        {current && <CurrentMap key={current} zone={zone} current={current} />}
+      </MapContainer>
+    <button
+      type="button"
+      className="paths-toggle"
+      aria-pressed={showPaths}
+      onClick={() => onShowPathsChange(!showPaths)}
     >
-      <FitOnResize bounds={bounds} />
-      <PlanLayer zone={zone} />
-      {zone.maps.map((entry) => {
-        const key = mapKey(entry.x, entry.y);
-        return (
-          <MapTile
-            key={key}
-            zone={zone}
-            entry={entry}
-            checked={checked.has(key)}
-            onToggle={onToggle}
-          />
-        );
-      })}
-      {current && <CurrentMap key={current} zone={zone} current={current} />}
-    </MapContainer>
+      Chemins
+    </button>
+    </>
   );
 }
 
 /** Drawn tiles: a dark room per map, corridors for the passages, coordinates. */
-const PlanLayer = memo(function PlanLayer({ zone }: { zone: Zone }) {
+const PlanLayer = memo(function PlanLayer({ zone, showPaths }: { zone: Zone; showPaths: boolean }) {
   const size = zone.tile_size;
   const shapes = useMemo(() => planShapes(zone), [zone]);
   // Drawn once per zone: an image per map is far lighter than a shape per cell.
@@ -109,15 +126,19 @@ const PlanLayer = memo(function PlanLayer({ zone }: { zone: Zone }) {
         ))}
       </Pane>
       <Pane name="plan" style={{ zIndex: 350 }}>
-        {shapes.bands.map((band, i) => (
-          <Polygon key={`band${i}`} positions={band} pathOptions={PLAN_CORRIDOR} />
-        ))}
-        {shapes.joints.map((p, i) => (
-          <Circle key={`joint${i}`} center={p} radius={TILE_HEIGHT * 0.045} pathOptions={PLAN_CORRIDOR} />
-        ))}
-        {shapes.nodes.map((p, i) => (
-          <Circle key={`node${i}`} center={p} radius={TILE_HEIGHT * 0.07} pathOptions={PLAN_NODE} />
-        ))}
+        {showPaths && (
+          <>
+            {shapes.routes.map((route, i) => (
+              <Polyline key={`route${i}`} positions={route} pathOptions={PLAN_ROUTE} />
+            ))}
+            {shapes.crossings.map((line, i) => (
+              <Polyline key={`crossing${i}`} positions={line} pathOptions={PLAN_CROSSING} />
+            ))}
+            {shapes.nodes.map((p, i) => (
+              <Circle key={`node${i}`} center={p} radius={TILE_HEIGHT * 0.07} pathOptions={PLAN_NODE} />
+            ))}
+          </>
+        )}
         {labels.map((l) => (
           <Marker key={l.key} position={l.position} icon={l.icon} interactive={false} keyboard={false} pane="markerPane" />
         ))}

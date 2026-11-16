@@ -21,6 +21,8 @@ export interface MapEntry {
   areas?: [number, number][];
   /** The map's own cells (floor, walls, suns), drawn in its plan tile. */
   layout?: MapLayout;
+  /** Walking routes between the map's suns, over its floor: polylines of (u, v). */
+  paths?: [number, number][][];
   confidence?: number;
   video_time?: number;
 }
@@ -37,9 +39,16 @@ export interface Zone {
   /**
    * Paths between map areas, from the game's map files: area a of map
    * [x, y] to area b of its right or bottom neighbour, crossing their
-   * shared edge at t (0..1 along it). Some maps have several separate paths.
+   * shared edge at t (0..1 along it), leaving a by the sun at ua and entering
+   * b by the sun at ub, (u, v) in their tiles. Some maps have several paths.
    */
-  passages?: { a: [number, number, number]; b: [number, number, number]; t: number }[];
+  passages?: {
+    a: [number, number, number];
+    b: [number, number, number];
+    t: number;
+    ua?: [number, number];
+    ub?: [number, number];
+  }[];
 }
 
 /**

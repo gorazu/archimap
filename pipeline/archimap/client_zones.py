@@ -134,12 +134,17 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
     for m in zone["maps"]:
         m.pop("areas", None)
         m.pop("layout", None)
+        m.pop("paths", None)
         if areas.get((m["x"], m["y"])):
             m["areas"] = [list(a.center) for a in areas[(m["x"], m["y"])]]
+            # Walking routes between the map's suns, over its floor.
+            m["paths"] = [[list(p) for p in route] for a in areas[(m["x"], m["y"])] for route in a.paths]
         # The map's own layout (floor, walls, suns), drawn inside its plan tile.
         if (m["x"], m["y"]) in layouts:
             m["layout"] = layouts[(m["x"], m["y"])]
-    zone["passages"] = [{"a": [*p.a[0], p.a[1]], "b": [*p.b[0], p.b[1]], "t": p.t} for p in passages]
+    zone["passages"] = [{"a": [*p.a[0], p.a[1]], "b": [*p.b[0], p.b[1]], "t": p.t,
+                         **({"ua": list(p.ua)} if p.ua else {}), **({"ub": list(p.ub)} if p.ub else {})}
+                        for p in passages]
     links |= suns
     # Without a map file, join to all neighbours, except recorded maps:
     # their walked passages are better than a guess.

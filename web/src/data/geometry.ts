@@ -40,29 +40,3 @@ export type Point = [number, number];
 export function tilePoint(x: number, y: number, [u, v]: [number, number], size: [number, number]): Point {
   return [-(y + v) * TILE_HEIGHT, (x + u) * tileWidth(size)];
 }
-
-/**
- * Where a passage crosses the edge between map a and its right or bottom
- * neighbour b, at t (0..1) along that edge.
- */
-export function edgePoint(a: [number, number], b: [number, number], t: number, size: [number, number]): Point {
-  const tw = tileWidth(size);
-  return b[0] === a[0] + 1
-    ? [-(a[1] + t) * TILE_HEIGHT, (a[0] + 1) * tw]
-    : [-(a[1] + 1) * TILE_HEIGHT, (a[0] + t) * tw];
-}
-
-/** A straight corridor from p to q, as a band of the given half width (map units). */
-export function segmentPolygon(p: Point, q: Point, halfWidth: number): Point[] {
-  const dLat = q[0] - p[0];
-  const dLng = q[1] - p[1];
-  const length = Math.hypot(dLat, dLng) || 1;
-  const nLat = (-dLng / length) * halfWidth;
-  const nLng = (dLat / length) * halfWidth;
-  return [
-    [p[0] + nLat, p[1] + nLng],
-    [q[0] + nLat, q[1] + nLng],
-    [q[0] - nLat, q[1] - nLng],
-    [p[0] - nLat, p[1] - nLng],
-  ];
-}

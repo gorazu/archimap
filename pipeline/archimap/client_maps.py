@@ -18,7 +18,8 @@ import glob
 import os
 import struct
 import zlib
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 from pathlib import Path
 
 Coords = tuple[int, int]
@@ -134,6 +135,7 @@ class Exit:
     side: str  # side of the map it leads through
     t: float  # position along that side, 0..1 (top to bottom, or left to right)
     inner: bool = False  # inside a closed room (ladder, door) rather than on the edge
+    uv: tuple[float, float] | None = None  # its sun in the tile, 0..1 from the top-left corner
 
 
 @dataclass
@@ -145,6 +147,8 @@ class Area:
     """
     center: tuple[float, float]  # (u, v) in the tile, 0..1 from the top-left corner
     exits: list[Exit]
+    # Walking routes between the area's suns, over its floor: polylines of (u, v).
+    paths: list[list[tuple[float, float]]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -152,6 +156,9 @@ class Passage:
     a: tuple[Coords, int]  # map and area index
     b: tuple[Coords, int]
     t: float  # where it crosses the edge shared by the two maps, 0..1 along it
+    # The suns it leaves a and enters b by, as (u, v) in their tiles (None if unknown).
+    ua: tuple[float, float] | None = None
+    ub: tuple[float, float] | None = None
 
 
 def read_cells(variables: dict[str, object]) -> tuple[dict[tuple[int, int], tuple[bool, bool]], int, int]:
@@ -182,8 +189,10 @@ _STEPS = ((1, 1), (1, -1), (-1, 1), (-1, -1), (2, 0), (-2, 0), (0, 2), (0, -2))
 _CLUSTER_GAP = 0.12
 
 
-def _exits(suns: list[tuple[int, int]], cols: int, rows: int) -> list[Exit]:
-    found: dict[tuple[str, bool], list[float]] = {}
+def _exits(suns: list[tuple[int, int]], cols: int, rows: int) -> list[tuple[Exit, tuple[int, int]]]:
+    """Exits from sun cells (suns close together form one), each with the sun
+    cell that stands for it."""
+    found: dict[tuple[str, bool], list[tuple[float, tuple[int, int]]]] = {}
     for x, y in suns:
         near = [side for side, ok in (("left", x <= EDGE_MARGIN), ("right", x >= cols - EDGE_MARGIN),
                                       ("top", y <= EDGE_MARGIN), ("bottom", y >= rows - EDGE_MARGIN)) if ok]
@@ -192,19 +201,72 @@ def _exits(suns: list[tuple[int, int]], cols: int, rows: int) -> list[Exit]:
             near = [("right" if dx > 0 else "left") if abs(dx) > abs(dy) else ("bottom" if dy > 0 else "top")]
         for side in near:
             t = y / rows if side in ("left", "right") else x / cols
-            found.setdefault((side, len(near) == 1 and not _on_edge(x, y, cols, rows)), []).append(t)
+            found.setdefault((side, len(near) == 1 and not _on_edge(x, y, cols, rows)), []).append((t, (x, y)))
     exits = []
-    for (side, inner), ts in found.items():
-        ts.sort()
-        group = [ts[0]]
-        for t in ts[1:] + [None]:
-            if t is not None and t - group[-1] <= _CLUSTER_GAP:
-                group.append(t)
+    for (side, inner), suns_on_side in found.items():
+        suns_on_side.sort()
+        group = [suns_on_side[0]]
+        for item in suns_on_side[1:] + [None]:
+            if item is not None and item[0] - group[-1][0] <= _CLUSTER_GAP:
+                group.append(item)
                 continue
-            exits.append(Exit(side, round(sum(group) / len(group), 3), inner))
-            if t is not None:
-                group = [t]
+            t = sum(g[0] for g in group) / len(group)
+            cell = min(group, key=lambda g: abs(g[0] - t))[1]
+            uv = (round(cell[0] / cols, 3), round(cell[1] / rows, 3))
+            exits.append((Exit(side, round(t, 3), inner, uv), cell))
+            if item is not None:
+                group = [item]
     return exits
+
+
+def _route(part: set[tuple[int, int]], start: tuple[int, int], goal: set[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Shortest walk over the part's cells from start to any cell of goal."""
+    previous = {start: start}
+    queue = deque([start])
+    while queue:
+        p = queue.popleft()
+        if p in goal:
+            path = [p]
+            while path[-1] != start:
+                path.append(previous[path[-1]])
+            return path[::-1]
+        for dx, dy in _STEPS:
+            q = (p[0] + dx, p[1] + dy)
+            if q in part and q not in previous:
+                previous[q] = p
+                queue.append(q)
+    return [start]
+
+
+def _straighten(path: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Drop the points in the middle of straight stretches."""
+    out = path[:2]
+    for p in path[2:]:
+        a, b = out[-2], out[-1]
+        if (b[0] - a[0], b[1] - a[1]) == (p[0] - b[0], p[1] - b[1]):
+            out[-1] = p
+        else:
+            out.append(p)
+    return out
+
+
+def _area_paths(part: set[tuple[int, int]], exit_cells: list[tuple[int, int]],
+                cols: int, rows: int) -> list[list[tuple[float, float]]]:
+    """Routes joining the part's exits over its floor, as a small tree. A part
+    with a single exit gets a route to its middle (a dead end)."""
+    cells = list(dict.fromkeys(exit_cells))
+    if len(cells) == 1:
+        cx = sum(x for x, _ in part) / len(part)
+        cy = sum(y for _, y in part) / len(part)
+        cells.append(min(part, key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2))
+    tree = {cells[0]}
+    routes = []
+    for cell in cells[1:]:
+        route = _route(part, cell, tree)
+        tree.update(route)
+        if len(route) > 1:
+            routes.append([(round(x / cols, 3), round(y / rows, 3)) for x, y in _straighten(route)])
+    return routes
 
 
 def _on_edge(x: int, y: int, cols: int, rows: int) -> bool:
@@ -231,7 +293,9 @@ def map_areas(variables: dict[str, object]) -> list[Area]:
         if suns:
             center = (round(sum(x for x, _ in part) / len(part) / cols, 3),
                       round(sum(y for _, y in part) / len(part) / rows, 3))
-            areas.append(Area(center, _exits(suns, cols, rows)))
+            exits = _exits(suns, cols, rows)
+            paths = _area_paths(set(part), [cell for _, cell in exits], cols, rows)
+            areas.append(Area(center, [e for e, _ in exits], paths))
     return areas
 
 
@@ -275,22 +339,29 @@ def passages_between(areas: dict[Coords, list[Area]]) -> list[Passage]:
                          or (any(not e.inner for _, e in there) and here) or any(e.inner for _, e in there))
             if not connected:
                 continue
-            for (i, j), t in _pair_areas(here, there, areas[(x, y)], areas[other]).items():
-                passages.append(Passage(((x, y), i), (other, j), t))
+            for (i, j), (t, ua, ub) in _pair_areas(here, there).items():
+                passages.append(Passage(((x, y), i), (other, j), t, ua, ub))
     return passages
 
 
-def _pair_areas(here: list[tuple[int, Exit]], there: list[tuple[int, Exit]],
-                parts_here: list[Area], parts_there: list[Area]) -> dict[tuple[int, int], float]:
-    """Which area here connects to which area there, and where they cross."""
-    # A room's inner exit may face no exit on the other map: use its first area there.
-    here = here or [(0, there[0][1])]
-    there = there or [(0, here[0][1])]
-    pairs: dict[tuple[int, int], float] = {}
+def _pair_areas(here: list[tuple[int, Exit]], there: list[tuple[int, Exit]]
+                ) -> dict[tuple[int, int], tuple[float, tuple | None, tuple | None]]:
+    """Which area here connects to which area there: where they cross the
+    edge, and the suns used on each side."""
+    # A room's inner exit may face no exit on the other map: use the first
+    # area there, entered at an unknown place.
+    if not here or not there:
+        known = here or there
+        pairs = {}
+        for k, e in known:
+            key = (k, 0) if here else (0, k)
+            pairs.setdefault(key, (e.t, e.uv if here else None, None if here else e.uv))
+        return pairs
+    pairs: dict[tuple[int, int], tuple[float, tuple | None, tuple | None]] = {}
     if len({i for i, _ in here}) == 1 or len({j for j, _ in there}) == 1:
         for i, a in here:
             for j, b in there:
-                pairs.setdefault((i, j), round((a.t + b.t) / 2, 3))
+                pairs.setdefault((i, j), (round((a.t + b.t) / 2, 3), a.uv, b.uv))
         return pairs
     # Both maps split: pair exits by position along the edge, closest first.
     used_here, used_there = set(), set()
@@ -301,7 +372,7 @@ def _pair_areas(here: list[tuple[int, Exit]], there: list[tuple[int, Exit]],
             continue
         used_here.add(k)
         used_there.add(m)
-        pairs.setdefault((i, j), round((a.t + b.t) / 2, 3))
+        pairs.setdefault((i, j), (round((a.t + b.t) / 2, 3), a.uv, b.uv))
     return pairs
 
 
