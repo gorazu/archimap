@@ -1,8 +1,9 @@
 import L from "leaflet";
 import { memo, useEffect, useMemo } from "react";
-import { Circle, MapContainer, Marker, Pane, Rectangle, Tooltip, useMap, useMapEvent } from "react-leaflet";
-import { corridorBounds, TILE_HEIGHT, tileBounds, tileCenter, tileWidth, zoneBounds, type Bounds } from "../data/geometry";
-import { mapKey, zoneLinks, type MapEntry, type Zone } from "../data/zones";
+import { Circle, MapContainer, Marker, Pane, Polygon, Rectangle, Tooltip, useMap, useMapEvent } from "react-leaflet";
+import { TILE_HEIGHT, tileBounds, tileWidth, zoneBounds, type Bounds } from "../data/geometry";
+import { planShapes } from "../data/plan";
+import { mapKey, type MapEntry, type Zone } from "../data/zones";
 import type { CheckedSet } from "../progress/progressStore";
 
 const STYLE_UNCHECKED: L.PathOptions = {
@@ -71,7 +72,7 @@ export function ZoneMap({ zone, checked, onToggle, current }: Props) {
 /** Drawn tiles: a dark room per map, corridors for the passages, coordinates. */
 const PlanLayer = memo(function PlanLayer({ zone }: { zone: Zone }) {
   const size = zone.tile_size;
-  const links = useMemo(() => zoneLinks(zone), [zone]);
+  const shapes = useMemo(() => planShapes(zone), [zone]);
   const labels = useMemo(
     () =>
       zone.maps.map((m) => ({
@@ -88,11 +89,14 @@ const PlanLayer = memo(function PlanLayer({ zone }: { zone: Zone }) {
       {zone.maps.map((m) => (
         <Rectangle key={mapKey(m.x, m.y)} bounds={tileBounds(m.x, m.y, size)} pathOptions={PLAN_TILE} />
       ))}
-      {links.map(([x1, y1, x2, y2]) => (
-        <Rectangle key={`${x1},${y1}-${x2},${y2}`} bounds={corridorBounds([x1, y1], [x2, y2], size)} pathOptions={PLAN_CORRIDOR} />
+      {shapes.bands.map((band, i) => (
+        <Polygon key={`band${i}`} positions={band} pathOptions={PLAN_CORRIDOR} />
       ))}
-      {zone.maps.map((m) => (
-        <Circle key={mapKey(m.x, m.y)} center={tileCenter(m.x, m.y, size)} radius={TILE_HEIGHT * 0.16} pathOptions={PLAN_NODE} />
+      {shapes.joints.map((p, i) => (
+        <Circle key={`joint${i}`} center={p} radius={TILE_HEIGHT * 0.09} pathOptions={PLAN_CORRIDOR} />
+      ))}
+      {shapes.nodes.map((p, i) => (
+        <Circle key={`node${i}`} center={p} radius={TILE_HEIGHT * 0.12} pathOptions={PLAN_NODE} />
       ))}
       {labels.map((l) => (
         <Marker key={l.key} position={l.position} icon={l.icon} interactive={false} keyboard={false} pane="markerPane" />

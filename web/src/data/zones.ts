@@ -15,6 +15,8 @@ export interface MapEntry {
   x: number;
   y: number;
   source: MapSource;
+  /** Walkable parts of the map that have exits, as (u, v) positions in the tile. */
+  areas?: [number, number][];
   confidence?: number;
   video_time?: number;
 }
@@ -28,6 +30,12 @@ export interface Zone {
   maps: MapEntry[];
   /** Passages between maps as [x1, y1, x2, y2], from the recorded route. Missing in older data. */
   links?: [number, number, number, number][];
+  /**
+   * Paths between map areas, from the game's map files: area a of map
+   * [x, y] to area b of its right or bottom neighbour, crossing their
+   * shared edge at t (0..1 along it). Some maps have several separate paths.
+   */
+  passages?: { a: [number, number, number]; b: [number, number, number]; t: number }[];
 }
 
 /**

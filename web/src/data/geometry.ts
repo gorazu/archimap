@@ -34,13 +34,35 @@ export function tileCenter(x: number, y: number, size: [number, number]): [numbe
   return [-(y + 0.5) * TILE_HEIGHT, (x + 0.5) * tw];
 }
 
-/** Corridor between two neighbouring maps' centres, as a band in map units. */
-export function corridorBounds(a: [number, number], b: [number, number], size: [number, number]): Bounds {
-  const half = TILE_HEIGHT * 0.09;
-  const [ay, ax] = tileCenter(a[0], a[1], size);
-  const [by, bx] = tileCenter(b[0], b[1], size);
+export type Point = [number, number];
+
+/** A point of a tile given as (u, v), 0..1 from its top-left corner. */
+export function tilePoint(x: number, y: number, [u, v]: [number, number], size: [number, number]): Point {
+  return [-(y + v) * TILE_HEIGHT, (x + u) * tileWidth(size)];
+}
+
+/**
+ * Where a passage crosses the edge between map a and its right or bottom
+ * neighbour b, at t (0..1) along that edge.
+ */
+export function edgePoint(a: [number, number], b: [number, number], t: number, size: [number, number]): Point {
+  const tw = tileWidth(size);
+  return b[0] === a[0] + 1
+    ? [-(a[1] + t) * TILE_HEIGHT, (a[0] + 1) * tw]
+    : [-(a[1] + 1) * TILE_HEIGHT, (a[0] + t) * tw];
+}
+
+/** A straight corridor from p to q, as a band of the given half width (map units). */
+export function segmentPolygon(p: Point, q: Point, halfWidth: number): Point[] {
+  const dLat = q[0] - p[0];
+  const dLng = q[1] - p[1];
+  const length = Math.hypot(dLat, dLng) || 1;
+  const nLat = (-dLng / length) * halfWidth;
+  const nLng = (dLat / length) * halfWidth;
   return [
-    [Math.min(ay, by) - half, Math.min(ax, bx) - half],
-    [Math.max(ay, by) + half, Math.max(ax, bx) + half],
+    [p[0] + nLat, p[1] + nLng],
+    [q[0] + nLat, q[1] + nLng],
+    [q[0] - nLat, q[1] - nLng],
+    [p[0] - nLat, p[1] - nLng],
   ];
 }

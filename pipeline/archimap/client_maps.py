@@ -18,7 +18,7 @@ import glob
 import os
 import struct
 import zlib
-from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 Coords = tuple[int, int]
@@ -129,72 +129,190 @@ def _run_actions(code: bytes) -> dict[str, object]:
     return out
 
 
-def trigger_cells(variables: dict[str, object]) -> tuple[list[tuple[int, int]], int, int]:
-    """Positions of the map-change cells, and the grid size, in half-cell units.
+@dataclass(frozen=True)
+class Exit:
+    side: str  # side of the map it leads through
+    t: float  # position along that side, 0..1 (top to bottom, or left to right)
+    inner: bool = False  # inside a closed room (ladder, door) rather than on the edge
+
+
+@dataclass
+class Area:
+    """A part of a map you can walk around in, with its own exits.
+
+    Some maps (Forêt maléfique) are split into separate parts, each reached
+    through different suns.
+    """
+    center: tuple[float, float]  # (u, v) in the tile, 0..1 from the top-left corner
+    exits: list[Exit]
+
+
+@dataclass(frozen=True)
+class Passage:
+    a: tuple[Coords, int]  # map and area index
+    b: tuple[Coords, int]
+    t: float  # where it crosses the edge shared by the two maps, 0..1 along it
+
+
+def read_cells(variables: dict[str, object]) -> tuple[dict[tuple[int, int], tuple[bool, bool]], int, int]:
+    """(walkable, has a sun) per cell position, and the grid size, in half-cell units.
 
     Cells come in rows of `width` then `width - 1` cells, offset by half a
     cell: x runs 0..2*width-2 across the screen, y 0..2*height-2 down it.
     """
     width, height = int(variables["width"]), int(variables["height"])
     data = str(variables["mapData"])
-    triggers = []
+    cells = {}
     for cell_id, k in enumerate(range(0, len(data) - 9, 10)):
         c = [_HASH[ch] for ch in data[k:k + 10]]
         active, movement = (c[0] & 32) >> 5, (c[2] & 56) >> 3
         layer1 = ((c[0] & 4) << 11) + ((c[4] & 1) << 12) + (c[5] << 6) + c[6]
         layer2 = ((c[0] & 2) << 12) + ((c[7] & 1) << 12) + (c[8] << 6) + c[9]
-        if (active and movement == TRIGGER_MOVEMENT) or SUN_GRAPHIC in (layer1, layer2):
-            pair, rest = divmod(cell_id, 2 * width - 1)
-            triggers.append((rest * 2, pair * 2) if rest < width else ((rest - width) * 2 + 1, pair * 2 + 1))
-    return triggers, 2 * width - 2, 2 * height - 2
+        sun = bool(active and movement == TRIGGER_MOVEMENT) or SUN_GRAPHIC in (layer1, layer2)
+        pair, rest = divmod(cell_id, 2 * width - 1)
+        pos = (rest * 2, pair * 2) if rest < width else ((rest - width) * 2 + 1, pair * 2 + 1)
+        cells[pos] = (bool(active and movement != 0) or sun, sun)
+    return cells, 2 * width - 2, 2 * height - 2
 
 
-def map_exits(triggers: Iterable[tuple[int, int]], cols: int, rows: int) -> tuple[set[str], set[str]]:
-    """Sides with a map change: (on the edge, from inside a closed room)."""
-    edge, inner = set(), set()
-    for x, y in triggers:
-        near = {side for side, ok in (("left", x <= EDGE_MARGIN), ("right", x >= cols - EDGE_MARGIN),
-                                      ("top", y <= EDGE_MARGIN), ("bottom", y >= rows - EDGE_MARGIN)) if ok}
-        if near:
-            edge |= near
-        else:
+# Out of fights, characters move in 8 directions: diagonals on the grid
+# above are the 4 "straight" steps, (±2, 0) and (0, ±2) the other 4.
+_STEPS = ((1, 1), (1, -1), (-1, 1), (-1, -1), (2, 0), (-2, 0), (0, 2), (0, -2))
+# Suns closer than this (along the side, 0..1) form one exit.
+_CLUSTER_GAP = 0.12
+
+
+def _exits(suns: list[tuple[int, int]], cols: int, rows: int) -> list[Exit]:
+    found: dict[tuple[str, bool], list[float]] = {}
+    for x, y in suns:
+        near = [side for side, ok in (("left", x <= EDGE_MARGIN), ("right", x >= cols - EDGE_MARGIN),
+                                      ("top", y <= EDGE_MARGIN), ("bottom", y >= rows - EDGE_MARGIN)) if ok]
+        if not near:  # inside a closed room: pointing away from the centre
             dx, dy = x - cols / 2, y - rows / 2
-            inner.add(("right" if dx > 0 else "left") if abs(dx) > abs(dy) else ("bottom" if dy > 0 else "top"))
-    return edge, inner
-
-
-def links_between(exits: dict[Coords, tuple[set[str], set[str]]]) -> set[Link]:
-    """Passages between neighbouring maps from their exits.
-
-    An edge exit needs a matching exit on the other map (both sides of the
-    passage have suns); a room's inner exit is enough on its own.
-    """
-    links = set()
-    for (x, y), (edge, inner) in exits.items():
-        for side, (dx, dy) in SIDES.items():
-            other = (x + dx, y + dy)
-            if other not in exits:
+            near = [("right" if dx > 0 else "left") if abs(dx) > abs(dy) else ("bottom" if dy > 0 else "top")]
+        for side in near:
+            t = y / rows if side in ("left", "right") else x / cols
+            found.setdefault((side, len(near) == 1 and not _on_edge(x, y, cols, rows)), []).append(t)
+    exits = []
+    for (side, inner), ts in found.items():
+        ts.sort()
+        group = [ts[0]]
+        for t in ts[1:] + [None]:
+            if t is not None and t - group[-1] <= _CLUSTER_GAP:
+                group.append(t)
                 continue
-            back = next(s for s, d in SIDES.items() if d == (-dx, -dy))
-            if (side in edge and back in exits[other][0] | exits[other][1]) or side in inner:
-                links.add(tuple(sorted(((x, y), other))))
-    return links
+            exits.append(Exit(side, round(sum(group) / len(group), 3), inner))
+            if t is not None:
+                group = [t]
+    return exits
+
+
+def _on_edge(x: int, y: int, cols: int, rows: int) -> bool:
+    return x <= EDGE_MARGIN or x >= cols - EDGE_MARGIN or y <= EDGE_MARGIN or y >= rows - EDGE_MARGIN
+
+
+def map_areas(variables: dict[str, object]) -> list[Area]:
+    """The walkable parts of a map that have exits."""
+    cells, cols, rows = read_cells(variables)
+    seen: set[tuple[int, int]] = set()
+    areas = []
+    for start, (walkable, _) in cells.items():
+        if not walkable or start in seen:
+            continue
+        part, stack = [], [start]
+        while stack:
+            p = stack.pop()
+            if p in seen or not cells.get(p, (False, False))[0]:
+                continue
+            seen.add(p)
+            part.append(p)
+            stack += [(p[0] + dx, p[1] + dy) for dx, dy in _STEPS]
+        suns = [p for p in part if cells[p][1]]
+        if suns:
+            center = (round(sum(x for x, _ in part) / len(part) / cols, 3),
+                      round(sum(y for _, y in part) / len(part) / rows, 3))
+            areas.append(Area(center, _exits(suns, cols, rows)))
+    return areas
+
+
+def read_areas(maps: dict[Coords, list[int]], maps_dir: Path) -> tuple[dict[Coords, list[Area]], set[Coords]]:
+    """Areas of every map (several map ids on one cell are pooled); also the
+    maps that had no readable map file."""
+    areas: dict[Coords, list[Area]] = {}
+    unreadable = set()
+    for coords, map_ids in maps.items():
+        files = [f for f in (plain_map_file(maps_dir, i) for i in map_ids) if f]
+        if not files:
+            unreadable.add(coords)
+            continue
+        areas[coords] = [a for f in files for a in map_areas(swf_variables(f))]
+    return areas, unreadable
+
+
+def passages_between(areas: dict[Coords, list[Area]]) -> list[Passage]:
+    """Passages between areas of neighbouring maps.
+
+    Two maps connect when one has an edge exit towards the other and the
+    other has any exit back, or when a closed room's inner exit points at
+    the other (checked on Égouts de Bonta against a recording). Suns aren't
+    mirrored between maps in general (you leave by one cell and arrive
+    elsewhere), so their positions only decide which areas connect when
+    both maps are split into several parts (Forêt maléfique): exits pair by
+    position along the shared edge. When one side has a single area, every
+    area of the other side with an exit connects to it.
+    """
+    passages = []
+    for (x, y) in sorted(areas):
+        for side in ("right", "bottom"):  # each neighbour pair once
+            dx, dy = SIDES[side]
+            other = (x + dx, y + dy)
+            if other not in areas:
+                continue
+            back = "left" if side == "right" else "top"
+            here = [(i, e) for i, part in enumerate(areas[(x, y)]) for e in part.exits if e.side == side]
+            there = [(j, e) for j, part in enumerate(areas[other]) for e in part.exits if e.side == back]
+            connected = ((any(not e.inner for _, e in here) and there) or any(e.inner for _, e in here)
+                         or (any(not e.inner for _, e in there) and here) or any(e.inner for _, e in there))
+            if not connected:
+                continue
+            for (i, j), t in _pair_areas(here, there, areas[(x, y)], areas[other]).items():
+                passages.append(Passage(((x, y), i), (other, j), t))
+    return passages
+
+
+def _pair_areas(here: list[tuple[int, Exit]], there: list[tuple[int, Exit]],
+                parts_here: list[Area], parts_there: list[Area]) -> dict[tuple[int, int], float]:
+    """Which area here connects to which area there, and where they cross."""
+    # A room's inner exit may face no exit on the other map: use its first area there.
+    here = here or [(0, there[0][1])]
+    there = there or [(0, here[0][1])]
+    pairs: dict[tuple[int, int], float] = {}
+    if len({i for i, _ in here}) == 1 or len({j for j, _ in there}) == 1:
+        for i, a in here:
+            for j, b in there:
+                pairs.setdefault((i, j), round((a.t + b.t) / 2, 3))
+        return pairs
+    # Both maps split: pair exits by position along the edge, closest first.
+    used_here, used_there = set(), set()
+    for distance, (k, (i, a)), (m, (j, b)) in sorted(
+            ((abs(a.t - b.t), (k, (i, a)), (m, (j, b)))
+             for k, (i, a) in enumerate(here) for m, (j, b) in enumerate(there)), key=lambda o: o[0]):
+        if k in used_here or m in used_there:
+            continue
+        used_here.add(k)
+        used_there.add(m)
+        pairs.setdefault((i, j), round((a.t + b.t) / 2, 3))
+    return pairs
+
+
+def sun_passages(maps: dict[Coords, list[int]], maps_dir: Path
+                 ) -> tuple[dict[Coords, list[Area]], list[Passage], set[Coords]]:
+    """Areas and passages from the map files; also the maps without a readable file."""
+    areas, unreadable = read_areas(maps, maps_dir)
+    return areas, passages_between(areas), unreadable
 
 
 def sun_links(maps: dict[Coords, list[int]], maps_dir: Path) -> tuple[set[Link], set[Coords]]:
-    """Passages from the map files; also returns the maps that had no readable file."""
-    exits: dict[Coords, tuple[set[str], set[str]]] = {}
-    unreadable = set()
-    for coords, map_ids in maps.items():
-        edge: set[str] = set()
-        inner: set[str] = set()
-        files = [plain_map_file(maps_dir, i) for i in map_ids]
-        if not any(files):
-            unreadable.add(coords)
-            continue
-        for path in filter(None, files):
-            e, n = map_exits(*trigger_cells(swf_variables(path)))
-            edge |= e
-            inner |= n
-        exits[coords] = (edge, inner)
-    return links_between(exits), unreadable
+    """Map-level passages (which maps connect), and the maps without a readable file."""
+    _, passages, unreadable = sun_passages(maps, maps_dir)
+    return {(p.a[0], p.b[0]) for p in passages}, unreadable

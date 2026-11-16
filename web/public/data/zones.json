@@ -1,6 +1,12 @@
 {
   "zones": [
     {
+      "zone": "foret-malefique",
+      "name": "Forêt maléfique",
+      "maps": 77,
+      "subarea": "La forêt maléfique"
+    },
+    {
       "zone": "souterrain-astrub",
       "name": "Souterrain d'Astrub",
       "maps": 6,

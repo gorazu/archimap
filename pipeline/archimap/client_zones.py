@@ -25,7 +25,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .client_maps import find_maps_dir, sun_links
+from .client_maps import find_maps_dir, sun_passages
 from .corrections import apply_link_corrections
 from .export import update_zone_index
 from .sol import read_sol
@@ -106,7 +106,8 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
         raise ValueError(f"sub-area {subarea} has no maps in {client.source.name}")
     name = config.get("name") or client.subareas[subarea][0]
     notes = []
-    suns, unreadable = sun_links(by_coords, maps_dir) if maps_dir else (set(), cells)
+    areas, passages, unreadable = sun_passages(by_coords, maps_dir) if maps_dir else ({}, [], cells)
+    suns = {(p.a[0], p.b[0]) for p in passages}
     if existing:
         maps = list(existing["maps"])
         recorded = {(m["x"], m["y"]) for m in maps if m["source"] != "client"}
@@ -127,12 +128,20 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
                 "tile_size": DEFAULT_TILE_SIZE, "maps": maps}
         notes.append(f"{len(maps)} maps")
     all_cells = {(m["x"], m["y"]) for m in zone["maps"]}
+    # Walkable areas (as tile positions) and the passages between them, for
+    # the plan: some maps are split into parts reached through different suns.
+    for m in zone["maps"]:
+        m.pop("areas", None)
+        if areas.get((m["x"], m["y"])):
+            m["areas"] = [list(a.center) for a in areas[(m["x"], m["y"])]]
+    zone["passages"] = [{"a": [*p.a[0], p.a[1]], "b": [*p.b[0], p.b[1]], "t": p.t} for p in passages]
     links |= suns
     # Without a map file, join to all neighbours, except recorded maps:
     # their walked passages are better than a guess.
     guessed = unreadable - recorded
     links |= {link for link in neighbour_links(all_cells) if set(link) & guessed}
-    notes.append(f"{len(suns)} passages from the map files")
+    notes.append(f"{len(suns)} passages from the map files"
+                 + (f" ({len(passages)} paths between map areas)" if len(passages) > len(suns) else ""))
     if guessed:
         notes.append(f"{len(guessed)} map(s) without a readable map file joined to all neighbours")
     final, link_notes = apply_link_corrections(links, config_path, all_cells)

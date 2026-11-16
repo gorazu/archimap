@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { corridorBounds, tileBounds, tileCenter, tileWidth, zoneBounds } from "./geometry";
+import { edgePoint, segmentPolygon, tileBounds, tilePoint, tileWidth, zoneBounds } from "./geometry";
 
 test("tile width keeps the aspect ratio", () => {
   expect(tileWidth([1280, 800])).toBe(160);
@@ -16,8 +16,13 @@ test("zone bounds cover every tile", () => {
   expect(zoneBounds(maps, [200, 100])).toEqual([[-600, -400], [-300, 400]]);
 });
 
-test("corridors join the centres of two maps", () => {
-  expect(tileCenter(0, 0, [200, 100])).toEqual([-50, 100]);
-  expect(corridorBounds([0, 0], [1, 0], [200, 100])).toEqual([[-59, 91], [-41, 309]]);
-  expect(corridorBounds([0, 1], [0, 0], [200, 100])).toEqual([[-159, 91], [-41, 109]]);
+test("points inside tiles and on shared edges", () => {
+  expect(tilePoint(1, 2, [0.5, 0.25], [200, 100])).toEqual([-225, 300]);
+  expect(edgePoint([0, 0], [1, 0], 0.25, [200, 100])).toEqual([-25, 200]); // right edge, a quarter down
+  expect(edgePoint([0, 0], [0, 1], 0.5, [200, 100])).toEqual([-100, 100]); // bottom edge, middle
+});
+
+test("corridor segments are bands around the line", () => {
+  const band = segmentPolygon([0, 0], [0, 10], 2);
+  expect(band).toEqual([[2, 0], [2, 10], [-2, 10], [-2, 0]]);
 });
