@@ -5,6 +5,8 @@ interface Props {
   live: LiveCapture;
   /** Name of the zone the current position belongs to, or null if none. */
   positionZone: string | null;
+  /** Where to go next, on the shortest walk over the maps left to check. */
+  guide: { next: string; rest: string | null; unreachable: number } | null;
   onClose: () => void;
 }
 
@@ -16,7 +18,7 @@ const STATUS_TEXT = {
   error: "Erreur",
 } as const;
 
-export function LivePanel({ live, positionZone, onClose }: Props) {
+export function LivePanel({ live, positionZone, guide, onClose }: Props) {
   const { state, options, setOptions } = live;
   const active = state.status === "running" || state.status === "paused";
   const position = state.position;
@@ -88,6 +90,20 @@ export function LivePanel({ live, positionZone, onClose }: Props) {
                 "En attente d'une lecture stable…"
               )}
             </dd>
+            {guide && (
+              <>
+                <dt>Ensuite</dt>
+                <dd className="live-guide">
+                  <strong>{guide.next}</strong>
+                  {guide.rest && <div>{guide.rest}</div>}
+                  {guide.unreachable > 0 && (
+                    <div>
+                      {guide.unreachable} carte{guide.unreachable > 1 ? "s" : ""} hors d'atteinte d'ici (par la surface ?)
+                    </div>
+                  )}
+                </dd>
+              </>
+            )}
             <dt>Lieu</dt>
             <dd>{state.location ?? "illisible (position seule)"}</dd>
             <dt>Lecture</dt>

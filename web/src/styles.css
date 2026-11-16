@@ -333,6 +333,15 @@ body,
   overflow-wrap: anywhere;
 }
 
+.live-guide strong {
+  color: #4fc3ff;
+}
+
+.live-guide div {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .live-preview {
   display: flex;
   flex-direction: column;
@@ -405,24 +414,72 @@ body,
   display: none;
 }
 
-.paths-toggle {
+.map-controls {
   position: absolute;
   top: 12px;
   right: 12px;
   z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: calc(100% - 80px);
+}
+
+.map-toggles {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.map-toggles button {
   font: inherit;
   font-size: 13px;
   color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  background: none;
+  border: none;
   padding: 6px 12px;
   cursor: pointer;
 }
 
-.paths-toggle[aria-pressed="true"] {
+.map-toggles button + button {
+  border-left: 1px solid var(--border);
+}
+
+.map-toggles button[aria-pressed="true"] {
   color: #1b1408;
   background: var(--accent);
-  border-color: var(--accent);
   font-weight: 600;
+}
+
+.route-summary {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: right;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.route-step {
+  display: grid;
+  place-items: center;
+  font: 700 11px/1 system-ui, sans-serif;
+  color: #0b2230;
+  background: #4fc3ff;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.plan-labels-hidden .route-step {
+  display: none;
+}
+
+.map .next-sun {
+  animation: current-pulse 1s ease-in-out infinite;
 }

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { planShapes } from "./plan";
+import { planShapes, routeShapes } from "./plan";
+import { buildGraph, planRoute } from "./route";
 import type { Zone } from "./zones";
 
 const zone = (extra: Partial<Zone>): Zone => ({
@@ -27,4 +28,20 @@ test("routes follow the floor and crossings join the suns", () => {
   expect(shapes.nodes).toEqual([]);
   expect(shapes.routes).toEqual([[[-50, 10], [-20, 50], [-50, 95]], [[-40, 105], [-90, 150]]]);
   expect(shapes.crossings).toEqual([[[-50, 95], [-40, 105]]]); // no extra straight line for that link
+});
+
+
+test("a route is drawn from sun to sun and numbered in visiting order", () => {
+  const z = zone({
+    maps: [{ x: 0, y: 0, source: "client" }, { x: 1, y: 0, source: "client" }],
+    links: [[0, 0, 1, 0]],
+    passages: [{ a: [0, 0, 0], b: [1, 0, 0], t: 0.5, ua: [0.9, 0.5], ub: [0.1, 0.5] }],
+  });
+  const graph = buildGraph(z);
+  const start = graph.nodes.findIndex((n) => n.map === "0,0");
+  const route = planRoute(graph, new Set(["1,0"]), [start])!;
+  const shapes = routeShapes(z, graph, route);
+  expect(shapes.line.map((pt) => pt.map(Math.round))).toEqual([[-50, 50], [-50, 90], [-50, 110]]);
+  expect(shapes.numbers.map((n) => n.label)).toEqual(["1", "2"]);
+  expect(shapes.nextSun).toEqual([-50, 90]);
 });

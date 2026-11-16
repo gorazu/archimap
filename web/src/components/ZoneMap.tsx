@@ -3,7 +3,8 @@ import { memo, useEffect, useMemo } from "react";
 import { Circle, ImageOverlay, MapContainer, Marker, Pane, Polyline, Rectangle, Tooltip, useMap, useMapEvent } from "react-leaflet";
 import { TILE_HEIGHT, tileBounds, tileWidth, zoneBounds, type Bounds } from "../data/geometry";
 import { drawLayout } from "../data/layout";
-import { planShapes } from "../data/plan";
+import { planShapes, routeShapes } from "../data/plan";
+import type { Route, ZoneGraph } from "../data/route";
 import { mapKey, type MapEntry, type Zone } from "../data/zones";
 import type { CheckedSet } from "../progress/progressStore";
 
@@ -23,6 +24,13 @@ const PLAN_ROUTE: L.PathOptions = {
 };
 const PLAN_CROSSING: L.PathOptions = { ...PLAN_ROUTE, dashArray: "1 7" };
 const PLAN_NODE: L.PathOptions = { stroke: false, fillColor: "#f1e4c2", fillOpacity: 0.85, interactive: false };
+// The suggested walk, in the same blue as the live position.
+const ROUTE_LINE: L.PathOptions = {
+  color: "#4fc3ff", weight: 4, opacity: 0.9, lineCap: "round", lineJoin: "round", interactive: false,
+};
+const NEXT_SUN: L.PathOptions = {
+  color: "#4fc3ff", weight: 3, fillColor: "#ffc94d", fillOpacity: 1, interactive: false, className: "next-sun",
+};
 // Leaflet stacks a pane's shapes (svg, z-index 200) above its images (1 by
 // default): raise the map layouts above their tile backgrounds.
 const LAYOUT_Z = 201;
@@ -42,9 +50,18 @@ interface Props {
   /** Draw the paths (walking routes and map changes). */
   showPaths: boolean;
   onShowPathsChange: (show: boolean) => void;
+  /** Draw the suggested walk over the maps not checked yet. */
+  showRoute: boolean;
+  onShowRouteChange: (show: boolean) => void;
+  route: Route | null;
+  graph: ZoneGraph | null;
+  /** Live capture is guiding the player: highlight the next sun. */
+  guiding: boolean;
 }
 
-export function ZoneMap({ zone, checked, onToggle, current, showPaths, onShowPathsChange }: Props) {
+export function ZoneMap({
+  zone, checked, onToggle, current, showPaths, onShowPathsChange, showRoute, onShowRouteChange, route, graph, guiding,
+}: Props) {
   const bounds = useMemo(() => zoneBounds(zone.maps, zone.tile_size), [zone]);
   return (
     <>
@@ -65,6 +82,9 @@ export function ZoneMap({ zone, checked, onToggle, current, showPaths, onShowPat
       >
         <FitOnResize bounds={bounds} />
         <PlanLayer zone={zone} showPaths={showPaths} />
+        {route && graph && (showRoute || guiding) && (
+          <RouteLayer zone={zone} graph={graph} route={route} numbered={showRoute} nextSun={guiding} />
+        )}
         {zone.maps.map((entry) => {
           const key = mapKey(entry.x, entry.y);
           return (
@@ -79,14 +99,17 @@ export function ZoneMap({ zone, checked, onToggle, current, showPaths, onShowPat
         })}
         {current && <CurrentMap key={current} zone={zone} current={current} />}
       </MapContainer>
-    <button
-      type="button"
-      className="paths-toggle"
-      aria-pressed={showPaths}
-      onClick={() => onShowPathsChange(!showPaths)}
-    >
-      Chemins
-    </button>
+      <div className="map-controls">
+        <div className="map-toggles">
+          <button type="button" aria-pressed={showPaths} onClick={() => onShowPathsChange(!showPaths)}>
+            Chemins
+          </button>
+          <button type="button" aria-pressed={showRoute} onClick={() => onShowRouteChange(!showRoute)}>
+            Parcours
+          </button>
+        </div>
+        {showRoute && <RouteSummary route={route} />}
+      </div>
     </>
   );
 }
@@ -147,6 +170,46 @@ const PlanLayer = memo(function PlanLayer({ zone, showPaths }: { zone: Zone; sho
     </>
   );
 });
+
+/** The suggested walk: a line from sun to sun, maps numbered in visiting order. */
+function RouteLayer({ zone, graph, route, numbered, nextSun }: {
+  zone: Zone; graph: ZoneGraph; route: Route; numbered: boolean; nextSun: boolean;
+}) {
+  const shapes = useMemo(() => routeShapes(zone, graph, route), [zone, graph, route]);
+  const icons = useMemo(
+    () => shapes.numbers.map((n) => L.divIcon({ className: "route-step", html: n.label, iconSize: [20, 20] })),
+    [shapes],
+  );
+  return (
+    <Pane name="route" style={{ zIndex: 360 }}>
+      <Polyline positions={shapes.line} pathOptions={ROUTE_LINE} />
+      {numbered &&
+        shapes.numbers.map((n, i) => (
+          <Marker key={`step${i}`} position={n.position} icon={icons[i]} interactive={false} keyboard={false} pane="markerPane" />
+        ))}
+      {nextSun && shapes.nextSun && (
+        <Circle center={shapes.nextSun} radius={TILE_HEIGHT * 0.07} pathOptions={NEXT_SUN} />
+      )}
+    </Pane>
+  );
+}
+
+function RouteSummary({ route }: { route: Route | null }) {
+  if (!route) return <p className="route-summary">Toutes les cartes sont vérifiées.</p>;
+  const moves = route.steps.length;
+  const repeats = moves + 1 - route.order.length;
+  return (
+    <p className="route-summary">
+      {moves} déplacement{moves > 1 ? "s" : ""} · {repeats} retour{repeats > 1 ? "s" : ""} sur une carte déjà vue
+      {route.unreachable.length > 0 && (
+        <>
+          <br />
+          {route.unreachable.length} carte{route.unreachable.length > 1 ? "s" : ""} hors d'atteinte depuis la zone
+        </>
+      )}
+    </p>
+  );
+}
 
 /** Hide coordinate labels when tiles are too small on screen to fit them. */
 function LabelVisibility() {
