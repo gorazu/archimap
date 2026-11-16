@@ -24,5 +24,6 @@ test("points inside tiles and on shared edges", () => {
 
 test("corridor segments are bands around the line", () => {
   const band = segmentPolygon([0, 0], [0, 10], 2);
-  expect(band).toEqual([[2, 0], [2, 10], [-2, 10], [-2, 0]]);
+  // A band 2 units either side of the line from (0, 0) to (0, 10).
+  expect(band).toEqual([[-2, 0], [-2, 10], [2, 10], [2, 0]]);
 });

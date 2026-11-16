@@ -1,8 +1,8 @@
 import struct
 import zlib
 
-from archimap.client_maps import (Area, Exit, map_areas, passages_between, plain_map_file, read_cells,
-                                  sun_links, swf_variables)
+from archimap.client_maps import (Area, Exit, map_areas, map_layout, passages_between, plain_map_file,
+                                  read_cells, sun_links, swf_variables)
 
 HASH = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
 WALK, WALL, SUN = 4, 0, 2  # cell movement types
@@ -109,3 +109,12 @@ def test_sun_links_from_files(tmp_path):
     (tmp_path / "2_0001.swf").write_bytes(map_swf(map_data({(0, 16): cell(SUN)})))   # exit left
     links, unreadable = sun_links({(0, 0): [1], (1, 0): [2], (2, 0): [3]}, tmp_path)
     assert links == {((0, 0), (1, 0))} and unreadable == {(2, 0)}
+
+
+def test_layout_packs_three_cells_per_character():
+    v = variables({(0, 0): cell(WALL), (2, 0): cell(SUN)})  # cells 0 and 1; the rest floor
+    layout = map_layout(v)
+    assert (layout["w"], layout["h"], len(layout["cells"])) == (15, 17, 160)  # ceil(479 / 3)
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+    first = alphabet.index(layout["cells"][0])
+    assert (first % 4, first // 4 % 4, first // 16) == (1, 3, 2)  # wall, sun, floor

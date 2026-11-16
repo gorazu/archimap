@@ -316,3 +316,41 @@ def sun_links(maps: dict[Coords, list[int]], maps_dir: Path) -> tuple[set[Link],
     """Map-level passages (which maps connect), and the maps without a readable file."""
     _, passages, unreadable = sun_passages(maps, maps_dir)
     return {(p.a[0], p.b[0]) for p in passages}, unreadable
+
+
+# Map layouts for the plan: each cell is 0 off-map, 1 wall/obstacle, 2 floor
+# or 3 sun, packed 3 cells per character (base64url alphabet, little end first).
+_LAYOUT_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+
+def map_layout(variables: dict[str, object]) -> dict[str, object]:
+    """The map's cells, compact: {"w": width, "h": height, "cells": packed string}."""
+    width, height = int(variables["width"]), int(variables["height"])
+    data = str(variables["mapData"])
+    values = []
+    for k in range(0, len(data) - 9, 10):
+        c = [_HASH[ch] for ch in data[k:k + 10]]
+        active, movement = (c[0] & 32) >> 5, (c[2] & 56) >> 3
+        layer1 = ((c[0] & 4) << 11) + ((c[4] & 1) << 12) + (c[5] << 6) + c[6]
+        layer2 = ((c[0] & 2) << 12) + ((c[7] & 1) << 12) + (c[8] << 6) + c[9]
+        if (active and movement == TRIGGER_MOVEMENT) or SUN_GRAPHIC in (layer1, layer2):
+            values.append(3)
+        elif not active:
+            values.append(0)
+        else:
+            values.append(2 if movement != 0 else 1)
+    values += [0] * (-len(values) % 3)
+    cells = "".join(_LAYOUT_ALPHABET[values[i] + 4 * values[i + 1] + 16 * values[i + 2]]
+                    for i in range(0, len(values), 3))
+    return {"w": width, "h": height, "cells": cells}
+
+
+def read_layouts(maps: dict[Coords, list[int]], maps_dir: Path) -> dict[Coords, dict[str, object]]:
+    """Layout of each map that has a readable file (the first one, when
+    several maps share a cell)."""
+    layouts = {}
+    for coords, map_ids in maps.items():
+        path = next((f for f in (plain_map_file(maps_dir, i) for i in map_ids) if f), None)
+        if path:
+            layouts[coords] = map_layout(swf_variables(path))
+    return layouts

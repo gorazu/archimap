@@ -7,6 +7,18 @@
       "subarea": "La forêt maléfique"
     },
     {
+      "zone": "sanctuaire-dragoeufs",
+      "name": "Sanctuaire des Dragoeufs",
+      "maps": 52,
+      "subarea": "Sanctuaire des Dragoeufs"
+    },
+    {
+      "zone": "sous-terrain-dragoeufs",
+      "name": "Sous-terrain des Dragoeufs",
+      "maps": 19,
+      "subarea": "Sous terrain des Dragoeufs"
+    },
+    {
       "zone": "souterrain-astrub",
       "name": "Souterrain d'Astrub",
       "maps": 6,

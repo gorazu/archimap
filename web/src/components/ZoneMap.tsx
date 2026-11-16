@@ -1,7 +1,8 @@
 import L from "leaflet";
 import { memo, useEffect, useMemo } from "react";
-import { Circle, MapContainer, Marker, Pane, Polygon, Rectangle, Tooltip, useMap, useMapEvent } from "react-leaflet";
+import { Circle, ImageOverlay, MapContainer, Marker, Pane, Polygon, Rectangle, Tooltip, useMap, useMapEvent } from "react-leaflet";
 import { TILE_HEIGHT, tileBounds, tileWidth, zoneBounds, type Bounds } from "../data/geometry";
+import { drawLayout } from "../data/layout";
 import { planShapes } from "../data/plan";
 import { mapKey, type MapEntry, type Zone } from "../data/zones";
 import type { CheckedSet } from "../progress/progressStore";
@@ -15,8 +16,12 @@ const STYLE_CHECKED: L.PathOptions = {
 };
 // Drawn tiles, like the mock zones.
 const PLAN_TILE: L.PathOptions = { stroke: false, fillColor: "#2b241b", fillOpacity: 1, interactive: false };
-const PLAN_CORRIDOR: L.PathOptions = { stroke: false, fillColor: "#6b5a40", fillOpacity: 1, interactive: false };
-const PLAN_NODE: L.PathOptions = { stroke: false, fillColor: "#8a7452", fillOpacity: 1, interactive: false };
+// Light and see-through, so they stand out from the map layouts underneath.
+const PLAN_CORRIDOR: L.PathOptions = { stroke: false, fillColor: "#f1e4c2", fillOpacity: 0.6, interactive: false };
+const PLAN_NODE: L.PathOptions = { stroke: false, fillColor: "#f1e4c2", fillOpacity: 0.85, interactive: false };
+// Leaflet stacks a pane's shapes (svg, z-index 200) above its images (1 by
+// default): raise the map layouts above their tile backgrounds.
+const LAYOUT_Z = 201;
 /** Coordinate labels are hidden when tiles get smaller than this on screen. */
 const LABEL_MIN_TILE_PX = 44;
 
@@ -73,6 +78,14 @@ export function ZoneMap({ zone, checked, onToggle, current }: Props) {
 const PlanLayer = memo(function PlanLayer({ zone }: { zone: Zone }) {
   const size = zone.tile_size;
   const shapes = useMemo(() => planShapes(zone), [zone]);
+  // Drawn once per zone: an image per map is far lighter than a shape per cell.
+  const layouts = useMemo(
+    () =>
+      zone.maps
+        .filter((m) => m.layout)
+        .map((m) => ({ key: mapKey(m.x, m.y), bounds: tileBounds(m.x, m.y, size), url: drawLayout(m.layout!) })),
+    [zone, size],
+  );
   const labels = useMemo(
     () =>
       zone.maps.map((m) => ({
@@ -82,27 +95,35 @@ const PlanLayer = memo(function PlanLayer({ zone }: { zone: Zone }) {
       })),
     [zone, size],
   );
-  // Own pane under the overlay pane, so the plan always sits below the
-  // clickable tiles and their checked colour.
+  // Own panes under the overlay pane, so the plan always sits below the
+  // clickable tiles and their checked colour. Tiles and map layouts get the
+  // lowest one: Leaflet draws images above the shapes of their own pane.
   return (
-    <Pane name="plan" style={{ zIndex: 350 }}>
-      {zone.maps.map((m) => (
-        <Rectangle key={mapKey(m.x, m.y)} bounds={tileBounds(m.x, m.y, size)} pathOptions={PLAN_TILE} />
-      ))}
-      {shapes.bands.map((band, i) => (
-        <Polygon key={`band${i}`} positions={band} pathOptions={PLAN_CORRIDOR} />
-      ))}
-      {shapes.joints.map((p, i) => (
-        <Circle key={`joint${i}`} center={p} radius={TILE_HEIGHT * 0.09} pathOptions={PLAN_CORRIDOR} />
-      ))}
-      {shapes.nodes.map((p, i) => (
-        <Circle key={`node${i}`} center={p} radius={TILE_HEIGHT * 0.12} pathOptions={PLAN_NODE} />
-      ))}
-      {labels.map((l) => (
-        <Marker key={l.key} position={l.position} icon={l.icon} interactive={false} keyboard={false} pane="markerPane" />
-      ))}
-      <LabelVisibility />
-    </Pane>
+    <>
+      <Pane name="plan-tiles" style={{ zIndex: 340 }}>
+        {zone.maps.map((m) => (
+          <Rectangle key={mapKey(m.x, m.y)} bounds={tileBounds(m.x, m.y, size)} pathOptions={PLAN_TILE} />
+        ))}
+        {layouts.map((l) => (
+          <ImageOverlay key={`layout${l.key}`} url={l.url} bounds={l.bounds} zIndex={LAYOUT_Z} />
+        ))}
+      </Pane>
+      <Pane name="plan" style={{ zIndex: 350 }}>
+        {shapes.bands.map((band, i) => (
+          <Polygon key={`band${i}`} positions={band} pathOptions={PLAN_CORRIDOR} />
+        ))}
+        {shapes.joints.map((p, i) => (
+          <Circle key={`joint${i}`} center={p} radius={TILE_HEIGHT * 0.045} pathOptions={PLAN_CORRIDOR} />
+        ))}
+        {shapes.nodes.map((p, i) => (
+          <Circle key={`node${i}`} center={p} radius={TILE_HEIGHT * 0.07} pathOptions={PLAN_NODE} />
+        ))}
+        {labels.map((l) => (
+          <Marker key={l.key} position={l.position} icon={l.icon} interactive={false} keyboard={false} pane="markerPane" />
+        ))}
+        <LabelVisibility />
+      </Pane>
+    </>
   );
 });
 

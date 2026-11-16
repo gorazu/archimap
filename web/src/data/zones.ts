@@ -1,3 +1,5 @@
+import type { MapLayout } from "./layout";
+
 // Types and loaders for the pipeline output in public/data (see zone.json schema in Plan.md).
 
 export interface ZoneSummary {
@@ -17,6 +19,8 @@ export interface MapEntry {
   source: MapSource;
   /** Walkable parts of the map that have exits, as (u, v) positions in the tile. */
   areas?: [number, number][];
+  /** The map's own cells (floor, walls, suns), drawn in its plan tile. */
+  layout?: MapLayout;
   confidence?: number;
   video_time?: number;
 }

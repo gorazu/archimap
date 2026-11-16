@@ -1,0 +1,613 @@
+{
+  "zone": "sous-terrain-dragoeufs",
+  "name": "Sous-terrain des Dragoeufs",
+  "source_video": null,
+  "tile_size": [
+    1371,
+    839
+  ],
+  "maps": [
+    {
+      "x": -3,
+      "y": 24,
+      "source": "client",
+      "areas": [
+        [
+          0.502,
+          0.39
+        ],
+        [
+          0.512,
+          0.797
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVVVVVVVVVVVVVWVVVlWVVVpWVWVqWlWVqWpVVqVqVlalqZZVppaW1ZpqVZVpaVaVaalWVWapVpVaaVaVqWlWZqVpVVaWaVZmlmpVVnVqVmdlqVpVppVaZaplWlWppVpVpaVaVpWlWVlVpVVVVbVVVVVVVVF"
+      }
+    },
+    {
+      "x": -2,
+      "y": 24,
+      "source": "client",
+      "areas": [
+        [
+          0.564,
+          0.453
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVlVVVVlVmVVlmqWWlqqlWlqqpVlqaqWlpamWVp2VWVpVlVVplpWVpVmWValVWlVZlZZValaWlWlqVtVpaVZVpaVWVqaVVlqaVVpqaVVpmaVVqqWVlqqVVlqaVVlqWVVlqVVVlaVVVVWVVVVVVVVVVVVVVVF"
+      }
+    },
+    {
+      "x": -6,
+      "y": 25,
+      "source": "client",
+      "areas": [
+        [
+          0.452,
+          0.523
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVVlVVVVpVVVWpVVlWqVVpmlVVqaVVlaWVVpmWVVqmWVValWVlalWVpamWVqalWVaalalWamalWalWVWapZlWaZalWamalWapWlWaaXlWqWVlWqVVlWaVVpVWVVqVWVlqVWVpalVVqWaVVqlWVlblVVVVVVF"
+      }
+    },
+    {
+      "x": -5,
+      "y": 25,
+      "source": "client",
+      "areas": [
+        [
+          0.497,
+          0.458
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVVVVVVlmVVVlWWVVlqaVVlqaVVVqWVVlqWVVZqWpVmqValVqlaZlqpWZZaqVWmaqlplWpZalWpmVlVpZVlVpWVVVmVVVlpVVlZqpVlmpqVpZpaVpWpWVrVpVVaVaVlWVVVlWVVVlVVVVVVVVVVVVVVVVVVF"
+      }
+    },
+    {
+      "x": -4,
+      "y": 25,
+      "source": "client",
+      "areas": [
+        [
+          0.581,
+          0.418
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVVWleVlVpWVZVqVValaVlWpWVpWpZVpVqVVaVqVVWVqXlWVqVlVVqVZVlaVaVlalaVlWpaVlVqWVplqWVapqVmWlqVqVlqlaVVpVWVVppWVVpaWVVpmWVVpVVVVZVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVF"
+      }
+    },
+    {
+      "x": -3,
+      "y": 25,
+      "source": "client",
+      "areas": [
+        [
+          0.553,
+          0.602
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVqWVVlqWVVlqWVVpqWVVpmqaVqWmWVqWlVVaWVVpaWVVaWWVVWVWVlVVWVZVVaVZVlaVWVpWlmVqWZmVqWWalmmVWllWlVllVVVp5VVVpWVVVpVVVVVF"
+      }
+    },
+    {
+      "x": -2,
+      "y": 25,
+      "source": "client",
+      "areas": [
+        [
+          0.489,
+          0.467
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVVZaaVVaaWVlaaWVZaaVWWaalmVaaZalaaWWZaWmVWaWqlVaVqZlalmWZaplVWeaplVmWqZlmmaWZlqqVWlqqlVlqqZVlqmWVVqlWVVapWVVWaWVlmWWVlqmVVlaaVVVWWVVVVVVVVVVVVVVVVVVVVVVVVF"
+      }
+    },
+    {
+      "x": -1,
+      "y": 25,
+      "source": "client",
+      "areas": [
+        [
+          0.5,
+          0.608
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVpVlWVaZpWlmqpWlppZVZZZpVVWpZWppplWaqpplmqpalpqpmZqqpplqqVapaqlWqWqpVqVqalaVqWlWVqVpVVaVrVlaVqVlalpVZaVpaWaVpqVaVpaVaVaaValWalWpZapVZWaqVaZqqValqZVepaZVVVVF"
+      }
+    },
+    {
+      "x": -6,
+      "y": 26,
+      "source": "client",
+      "areas": [
+        [
+          0.473,
+          0.508
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVpuWVVpqWVVpqWVVpqVVVpaVVVpWVVVpWVVVlWlVVlWlVVlWpVVlWpVVlWapWpmZpWqaVpmqWVqqqWVqqqWVqqmWVqqmWVqqlVVqalVVqmZVVmZWllalWpZapVqWaaVqVqWlqVqVlaVZVlWVVVlVVVVVVVVF"
+      }
+    },
+    {
+      "x": -5,
+      "y": 26,
+      "source": "client",
+      "areas": [
+        [
+          0.512,
+          0.552
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVVWVVVlWVVVlWVVVlWVVVlWVVVlqVVVlqVVVlqVVWlqVlWlqVpWpaVqWqWlqmqWpqqqWqqZqWWqWqpWmVqpWqVapWqVeqWlZWqWpVWqWllVqWppVqWlalqWpWZqWZVWqWVlWqWVlWqWVlWqVVlX6VVVVVVF"
+      }
+    },
+    {
+      "x": -4,
+      "y": 26,
+      "source": "client",
+      "areas": [
+        [
+          0.576,
+          0.534
+        ],
+        [
+          0.206,
+          0.367
+        ],
+        [
+          0.884,
+          0.612
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVVVVVVVlWVVVpWVlWqWVpVqWVaVqVValaVlapaVlapaVpWpaVqVqalapqZpWqaVqVqWlamqVlWpaZpZqWaZmqVabpalaaqWpWlqVpXpaVpVqWVlVqWZVVqWaVVmWaVVlmaVVlqWVVlqVVVlaVVV5WVVVVVF"
+      }
+    },
+    {
+      "x": -3,
+      "y": 26,
+      "source": "client",
+      "areas": [
+        [
+          0.612,
+          0.468
+        ],
+        [
+          0.249,
+          0.725
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVVVVVVVVVVVVaVVVlaVVlZaVVpWqWVqVqWlaVqVpWVqVqVpaVaVqalalqapWVpaaVVpWVVWpWVpVlVVaVpVlWVWVpVlVVaVZVlWVWVpVlVVaVZVlaVWVnWlWVqWpWlqVpWlaVqWlWlqVlVpqVVV6aVVVVVF"
+      }
+    },
+    {
+      "x": -2,
+      "y": 26,
+      "source": "client",
+      "areas": [
+        [
+          0.476,
+          0.474
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVXWWVVWqWVlWqWVlWmWZlmlWalalmZlWWadlVlWVZVlWVaVlVValZVlaWaVZWmaVWapalVaqalVqWalVqWallVWapZlWeqWlWmmVlmmWVpqlWVmalWllWlWZlVlWWVVlmWVVlaaVVlWaVVlVVVVVVVVVVVVF"
+      }
+    },
+    {
+      "x": -1,
+      "y": 26,
+      "source": "client",
+      "areas": [
+        [
+          0.447,
+          0.567
+        ],
+        [
+          0.089,
+          0.234
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVepZVVappVVappVVappVVapplVapZZVapZWVap1VVapVVlapVVpaplVaaZpVqaZqlaa1qqqalpqmaZpqqaVpqaaVpqWaVpqVWlpqVVqpmVlqplVppZlVapVZVmpVWlWalVlmaZVlqZWVlapVVlWZVVVVVVF"
+      }
+    },
+    {
+      "x": -5,
+      "y": 27,
+      "source": "client",
+      "areas": [
+        [
+          0.547,
+          0.519
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVb5aVVapaVVapaVVapaVVWpaVlWpWVpVqWValqVlWpaVpVpWVaVpVlaVZVpZVaVpZVaVpZVaVpZVaVpZVaVpZVaVpZlWVpapVVpaaVVpqWVVqqVVpaaVVqWaVVqVaVlaZaVlqVaVpqZaVqqlaV6qlXVVVVF"
+      }
+    },
+    {
+      "x": -4,
+      "y": 27,
+      "source": "client",
+      "areas": [
+        [
+          0.563,
+          0.512
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVluqVVlqqVVlmqVVplqVValqVVWmaVlZlaVZVmWVWVlWlVllVaVVqlmVlWpVVpWaVVqWWVVqlVVVapVVqWpVVqVqllaVqVpWVqlqWVqpqWVqqqWVqqqWVqqqWVqqqVVqaaVVqWVVVqVVVVaVVVVWVVVVVVF"
+      }
+    },
+    {
+      "x": -3,
+      "y": 27,
+      "source": "client",
+      "areas": [
+        [
+          0.507,
+          0.468
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVVV5aVVVpaVVVpWVVVpWVaVpWlaWpWpqWpWqqWpmqaWamqWmWVqVqlVaVaZlWlmaZWplWWWaplWlaqlWpqplWaaZlWWmZlWVWWlWVmWlWlqVpVZaVaVWWlWlVVpWZVVaWWVVWmVVVqaVVVqWVVVuWVVVVVVF"
+      }
+    },
+    {
+      "x": -5,
+      "y": 28,
+      "source": "client",
+      "areas": [
+        [
+          0.451,
+          0.5
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVV5qqVVpqqVVpqaVVpqWVVlmVVVlWVVVlWVlVpWVpVpWVZVpWVaVpWlqVqVpqlaVqZpWlaZqVlWqaVlmqWVlqqVVlqZVVlqZVVlWpVVlWpVVlmZVllWZVZlWZVqlWWlalmWlqpqVlamaVlqlWVlaVVVVVVVF"
+      }
+    },
+    {
+      "x": -3,
+      "y": 28,
+      "source": "client",
+      "areas": [
+        [
+          0.496,
+          0.506
+        ]
+      ],
+      "layout": {
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVV5aVVVqaZVlpWZVZqWZVmlWplZlWapWlmZqVlalqVlWlaVlWlWVlWlWVlWlWqlWpValWalqlmWqalpVqqlZlmqZalqWZalqVWalqlWapqpValpaVaZpWVaZpVmaVaVaalWVWapVVWqaVlVqWVlVqVVVVVVF"
+      }
+    }
+  ],
+  "passages": [
+    {
+      "a": [
+        -6,
+        25,
+        0
+      ],
+      "b": [
+        -5,
+        25,
+        0
+      ],
+      "t": 0.719
+    },
+    {
+      "a": [
+        -6,
+        25,
+        0
+      ],
+      "b": [
+        -6,
+        26,
+        0
+      ],
+      "t": 0.285
+    },
+    {
+      "a": [
+        -5,
+        26,
+        0
+      ],
+      "b": [
+        -4,
+        26,
+        1
+      ],
+      "t": 0.594
+    },
+    {
+      "a": [
+        -5,
+        26,
+        0
+      ],
+      "b": [
+        -5,
+        27,
+        0
+      ],
+      "t": 0.25
+    },
+    {
+      "a": [
+        -5,
+        27,
+        0
+      ],
+      "b": [
+        -5,
+        28,
+        0
+      ],
+      "t": 0.393
+    },
+    {
+      "a": [
+        -4,
+        26,
+        2
+      ],
+      "b": [
+        -3,
+        26,
+        1
+      ],
+      "t": 0.719
+    },
+    {
+      "a": [
+        -4,
+        26,
+        0
+      ],
+      "b": [
+        -4,
+        27,
+        0
+      ],
+      "t": 0.572
+    },
+    {
+      "a": [
+        -3,
+        24,
+        0
+      ],
+      "b": [
+        -2,
+        24,
+        0
+      ],
+      "t": 0.312
+    },
+    {
+      "a": [
+        -3,
+        24,
+        1
+      ],
+      "b": [
+        -2,
+        24,
+        0
+      ],
+      "t": 0.469
+    },
+    {
+      "a": [
+        -3,
+        26,
+        0
+      ],
+      "b": [
+        -3,
+        27,
+        0
+      ],
+      "t": 0.607
+    },
+    {
+      "a": [
+        -3,
+        27,
+        0
+      ],
+      "b": [
+        -3,
+        28,
+        0
+      ],
+      "t": 0.357
+    },
+    {
+      "a": [
+        -2,
+        25,
+        0
+      ],
+      "b": [
+        -1,
+        25,
+        0
+      ],
+      "t": 0.5
+    },
+    {
+      "a": [
+        -2,
+        26,
+        0
+      ],
+      "b": [
+        -1,
+        26,
+        0
+      ],
+      "t": 0.344
+    },
+    {
+      "a": [
+        -2,
+        26,
+        0
+      ],
+      "b": [
+        -1,
+        26,
+        1
+      ],
+      "t": 0.25
+    },
+    {
+      "a": [
+        -1,
+        25,
+        0
+      ],
+      "b": [
+        -1,
+        26,
+        0
+      ],
+      "t": 0.321
+    }
+  ],
+  "links": [
+    [
+      -6,
+      25,
+      -6,
+      26
+    ],
+    [
+      -6,
+      25,
+      -5,
+      25
+    ],
+    [
+      -5,
+      26,
+      -5,
+      27
+    ],
+    [
+      -5,
+      26,
+      -4,
+      26
+    ],
+    [
+      -5,
+      27,
+      -5,
+      28
+    ],
+    [
+      -4,
+      26,
+      -4,
+      27
+    ],
+    [
+      -4,
+      26,
+      -3,
+      26
+    ],
+    [
+      -3,
+      24,
+      -2,
+      24
+    ],
+    [
+      -3,
+      26,
+      -3,
+      27
+    ],
+    [
+      -3,
+      27,
+      -3,
+      28
+    ],
+    [
+      -2,
+      25,
+      -1,
+      25
+    ],
+    [
+      -2,
+      26,
+      -1,
+      26
+    ],
+    [
+      -1,
+      25,
+      -1,
+      26
+    ]
+  ],
+  "client_subarea": 316
+}

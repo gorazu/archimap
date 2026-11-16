@@ -6,7 +6,8 @@
 import { edgePoint, segmentPolygon, TILE_HEIGHT, tileCenter, tilePoint, type Point } from "./geometry";
 import { mapKey, zoneLinks, type Zone } from "./zones";
 
-const HALF_WIDTH = TILE_HEIGHT * 0.09;
+// Thin: the map layouts underneath show the real paths; corridors show the connections.
+const HALF_WIDTH = TILE_HEIGHT * 0.045;
 
 export interface PlanShapes {
   /** One per walkable area with exits (or the tile centre without area data). */

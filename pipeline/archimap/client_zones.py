@@ -25,7 +25,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .client_maps import find_maps_dir, sun_passages
+from .client_maps import find_maps_dir, read_layouts, sun_passages
 from .corrections import apply_link_corrections
 from .export import update_zone_index
 from .sol import read_sol
@@ -107,6 +107,7 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
     name = config.get("name") or client.subareas[subarea][0]
     notes = []
     areas, passages, unreadable = sun_passages(by_coords, maps_dir) if maps_dir else ({}, [], cells)
+    layouts = read_layouts(by_coords, maps_dir) if maps_dir else {}
     suns = {(p.a[0], p.b[0]) for p in passages}
     if existing:
         maps = list(existing["maps"])
@@ -132,8 +133,12 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
     # the plan: some maps are split into parts reached through different suns.
     for m in zone["maps"]:
         m.pop("areas", None)
+        m.pop("layout", None)
         if areas.get((m["x"], m["y"])):
             m["areas"] = [list(a.center) for a in areas[(m["x"], m["y"])]]
+        # The map's own layout (floor, walls, suns), drawn inside its plan tile.
+        if (m["x"], m["y"]) in layouts:
+            m["layout"] = layouts[(m["x"], m["y"])]
     zone["passages"] = [{"a": [*p.a[0], p.a[1]], "b": [*p.b[0], p.b[1]], "t": p.t} for p in passages]
     links |= suns
     # Without a map file, join to all neighbours, except recorded maps:
