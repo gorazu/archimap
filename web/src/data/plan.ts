@@ -2,7 +2,7 @@
 // map files: between its suns, over its floor) and the map changes between
 // them, from the sun you leave by to the sun you arrive at.
 import { tileCenter, tilePoint, type Point } from "./geometry";
-import type { Route, ZoneGraph } from "./route";
+import type { Route, RouteStep, ZoneGraph } from "./route";
 import { mapKey, zoneLinks, type Zone } from "./zones";
 
 export interface PlanShapes {
@@ -45,16 +45,13 @@ export function planShapes(zone: Zone): PlanShapes {
 }
 
 export interface RouteShapes {
-  /** The walk, from sun to sun. */
+  /** The walk, from sun to sun: the start, then each step's leaving and entering points. */
   line: Point[];
   /** Visiting order: a number where each map is first reached. */
-  numbers: { label: string; position: Point }[];
-  /** The sun to click next, when known. */
-  nextSun: Point | null;
+  numbers: { map: string; label: string; position: Point }[];
 }
 
 export function routeShapes(zone: Zone, graph: ZoneGraph, route: Route): RouteShapes {
-  const size = zone.tile_size;
   const maps = new Map(zone.maps.map((m) => [mapKey(m.x, m.y), m]));
   const nodePoint = (i: number) => {
     const n = graph.nodes[i];
@@ -62,20 +59,25 @@ export function routeShapes(zone: Zone, graph: ZoneGraph, route: Route): RouteSh
   };
   const start = nodePoint(route.start);
   const line = [start];
-  const numbers = [{ label: "1", position: start }];
+  const numbers = [{ map: graph.nodes[route.start].map, label: "1", position: start }];
   const seen = new Set([graph.nodes[route.start].map]);
   for (const step of route.steps) {
-    const from = graph.nodes[step.from];
+    line.push(leavePoint(zone, graph, step));
     const to = graph.nodes[step.to];
-    line.push(step.leave ? tilePoint(from.x, from.y, step.leave, size) : nodePoint(step.from));
-    const arrival = step.enter ? tilePoint(to.x, to.y, step.enter, size) : nodePoint(step.to);
+    const arrival = step.enter ? tilePoint(to.x, to.y, step.enter, zone.tile_size) : nodePoint(step.to);
     line.push(arrival);
     if (!seen.has(to.map)) {
       seen.add(to.map);
-      numbers.push({ label: String(seen.size), position: arrival });
+      numbers.push({ map: to.map, label: String(seen.size), position: arrival });
     }
   }
-  const first = route.steps[0];
-  const nextSun = first?.leave ? tilePoint(graph.nodes[first.from].x, graph.nodes[first.from].y, first.leave, size) : null;
-  return { line, numbers, nextSun };
+  return { line, numbers };
+}
+
+/** Where a step leaves its map: its sun, or the map part when unknown. */
+export function leavePoint(zone: Zone, graph: ZoneGraph, step: RouteStep): Point {
+  const from = graph.nodes[step.from];
+  if (step.leave) return tilePoint(from.x, from.y, step.leave, zone.tile_size);
+  const maps = new Map(zone.maps.map((m) => [mapKey(m.x, m.y), m]));
+  return partPoint(zone, maps, from.x, from.y, from.area);
 }

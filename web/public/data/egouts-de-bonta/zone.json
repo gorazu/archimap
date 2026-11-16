@@ -8748,5 +8748,51 @@
         0.031
       ]
     }
+  ],
+  "entrances": [
+    {
+      "x": -26,
+      "y": -60,
+      "area": 0,
+      "kind": "ladder",
+      "uv": [
+        0.571,
+        0.375
+      ],
+      "to": "Bonta"
+    },
+    {
+      "x": -34,
+      "y": -59,
+      "area": 0,
+      "kind": "ladder",
+      "uv": [
+        0.571,
+        0.375
+      ],
+      "to": "Bonta"
+    },
+    {
+      "x": -35,
+      "y": -54,
+      "area": 1,
+      "kind": "ladder",
+      "uv": [
+        0.571,
+        0.375
+      ],
+      "to": "Bonta"
+    },
+    {
+      "x": -25,
+      "y": -50,
+      "area": 0,
+      "kind": "ladder",
+      "uv": [
+        0.321,
+        0.656
+      ],
+      "to": "Fortification de Bonta"
+    }
   ]
 }

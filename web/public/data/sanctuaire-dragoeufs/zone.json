@@ -7814,5 +7814,18 @@
       30
     ]
   ],
-  "client_subarea": 314
+  "client_subarea": 314,
+  "entrances": [
+    {
+      "x": -6,
+      "y": 26,
+      "area": 0,
+      "kind": "sun",
+      "uv": [
+        0.107,
+        0.969
+      ],
+      "to": "La presqu'île des Dragoeufs"
+    }
+  ]
 }

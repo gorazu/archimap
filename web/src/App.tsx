@@ -3,7 +3,10 @@ import { Header } from "./components/Header";
 import { LivePanel } from "./components/LivePanel";
 import { ZoneMap } from "./components/ZoneMap";
 import { fetchZone, fetchZoneIndex, mapKey, type Zone, type ZoneSummary } from "./data/zones";
-import { buildGraph, describePosition, planRoute, type Route, type ZoneGraph } from "./data/route";
+import {
+  buildGraph, describePosition, guideFrom, planEntrances, routeProgress,
+  type EntranceRoute, type Guidance, type Progress, type ZoneGraph,
+} from "./data/route";
 import { resolveZone, type ZoneLookup } from "./live/location";
 import { isLiveCaptureSupported } from "./live/session";
 import { useLiveCapture } from "./live/useLiveCapture";
@@ -59,19 +62,35 @@ function initialZone(zones: ZoneSummary[]): string | null {
 }
 
 /** The live guide's lines: which sun to click next, and what's left. */
-function guideText(route: Route, graph: ZoneGraph, remaining: number) {
-  const next = route.steps[0];
-  const unreachable = route.unreachable.length;
-  if (!next) {
-    return { next: remaining === 0 ? "Zone terminée !" : "Plus aucune carte accessible d'ici", rest: null, unreachable };
+function guideText(guidance: Guidance, progress: Progress, graph: ZoneGraph, left: number, unreachable: number) {
+  const step = guidance.step;
+  if (!step) {
+    return {
+      next: progress.nextGoal ? "Prochaine carte du parcours hors d'atteinte d'ici" : "Zone terminée !",
+      rest: null,
+      unreachable,
+    };
   }
-  const target = graph.nodes[next.to];
-  const where = next.leave ? `soleil ${describePosition(next.leave)}` : "passage";
+  const target = graph.nodes[step.to];
+  const where = step.leave ? `soleil ${describePosition(step.leave)}` : "passage";
   return {
-    next: `${where} → [${target.x},${target.y}]`,
-    rest: `${remaining} carte${remaining > 1 ? "s" : ""} à vérifier · ${route.steps.length} déplacement${route.steps.length > 1 ? "s" : ""}`,
+    next: `${guidance.detour ? "Retour au parcours : " : ""}${where} → [${target.x},${target.y}]`,
+    rest: `${left} carte${left > 1 ? "s" : ""} à vérifier · ${guidance.remaining} déplacement${guidance.remaining > 1 ? "s" : ""}`,
     unreachable,
   };
+}
+
+/** Which entrance's route the player follows, per zone, remembered. */
+function entranceKey(plan: EntranceRoute): string {
+  return plan.entrance ? `${plan.entrance.x},${plan.entrance.y},${plan.entrance.area},${plan.entrance.kind}` : "free";
+}
+
+function storedEntrance(zone: string): string | null {
+  try {
+    return localStorage.getItem(`archimap:entrance:${zone}`);
+  } catch {
+    return null;
+  }
 }
 
 export function App() {
@@ -157,23 +176,37 @@ export function App() {
     }
   }, [current]);
 
-  // Shortest walk over the maps not checked yet: from the live position when
-  // capturing (guiding the player sun by sun), else from the best start.
+  // One route per entrance, computed once per zone. The player follows the
+  // chosen one; progress along it comes from the maps checked.
   const graph = useMemo(() => (zone ? buildGraph(zone) : null), [zone]);
-  const toVisit = useMemo(
-    () => new Set(zone?.maps.map((m) => mapKey(m.x, m.y)).filter((key) => !checked.has(key))),
-    [zone, checked],
+  const plans = useMemo(() => (zone && graph ? planEntrances(zone, graph) : null), [zone, graph]);
+  const [chosen, setChosen] = useState<string | null>(null);
+  useEffect(() => setChosen(slug ? storedEntrance(slug) : null), [slug]);
+  const chooseEntrance = useCallback(
+    (key: string) => {
+      setChosen(key);
+      try {
+        if (slug) localStorage.setItem(`archimap:entrance:${slug}`, key);
+      } catch {
+        // Not important if it can't be stored.
+      }
+    },
+    [slug],
+  );
+  const plan = plans?.find((p) => entranceKey(p) === chosen) ?? plans?.[0] ?? null;
+  const progress = useMemo(
+    () => (plan && graph ? routeProgress(plan.route, checked, graph) : null),
+    [plan, graph, checked],
   );
   const guiding = (live.state.status === "running" || live.state.status === "paused") && current !== null;
-  const route = useMemo(() => {
-    if (!graph) return null;
-    if (guiding) {
-      const here = graph.nodes.flatMap((n, i) => (n.map === current ? [i] : []));
-      const cameFrom = here.filter((i) => [...graph.edges.get(i)!.keys()].some((j) => graph.nodes[j].map === previousMap));
-      return planRoute(graph, toVisit, cameFrom.length ? cameFrom : here);
-    }
-    return showRoute && toVisit.size ? planRoute(graph, toVisit) : null;
-  }, [graph, guiding, current, previousMap, toVisit, showRoute]);
+  const guidance = useMemo(() => {
+    if (!guiding || !plan || !progress || !graph) return null;
+    // On a split map, the part entered from the previous map comes first.
+    const here = graph.nodes.flatMap((n, i) => (n.map === current ? [i] : []));
+    const cameFrom = here.filter((i) => [...graph.edges.get(i)!.keys()].some((j) => graph.nodes[j].map === previousMap));
+    return guideFrom(plan.route, progress, graph, [...cameFrom, ...here.filter((i) => !cameFrom.includes(i))]);
+  }, [guiding, plan, progress, graph, current, previousMap]);
+  const left = zone ? zone.maps.filter((m) => !checked.has(mapKey(m.x, m.y))).length : 0;
 
   // Ignore stored keys for maps that are no longer in the zone.
   const checkedCount = useMemo(
@@ -227,16 +260,20 @@ export function App() {
             onShowPathsChange={setShowPaths}
             showRoute={showRoute}
             onShowRouteChange={setShowRoute}
-            route={route}
+            plans={plans}
+            plan={plan}
+            onChooseEntrance={(p: EntranceRoute) => chooseEntrance(entranceKey(p))}
+            progress={progress}
             graph={graph}
-            guiding={guiding}
+            nextStep={guidance?.step ?? null}
           />
         ) : null}
         {liveOpen && zone && (
           <LivePanel
             live={live}
             positionZone={positionZone ? (zones?.find((z) => z.zone === positionZone)?.name ?? null) : null}
-            guide={guiding && route && graph ? guideText(route, graph, toVisit.size) : null}
+            guide={guidance && progress && graph && plan
+              ? guideText(guidance, progress, graph, left, plan.route.unreachable.length) : null}
             onClose={() => setLiveOpen(false)}
           />
         )}

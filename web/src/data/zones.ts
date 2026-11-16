@@ -42,6 +42,11 @@ export interface Zone {
    * shared edge at t (0..1 along it), leaving a by the sun at ua and entering
    * b by the sun at ub, (u, v) in their tiles. Some maps have several paths.
    */
+  /**
+   * Ways into the zone: ladders and suns leading out of it (from the map
+   * files), or added by hand in the zone's config (an NPC).
+   */
+  entrances?: ZoneEntrance[];
   passages?: {
     a: [number, number, number];
     b: [number, number, number];
@@ -63,6 +68,18 @@ export function zoneLinks(zone: Zone): [number, number, number, number][] {
       .filter(([x, y]) => keys.has(mapKey(x, y)))
       .map(([x, y]) => [m.x, m.y, x, y] as [number, number, number, number]),
   );
+}
+
+export interface ZoneEntrance {
+  x: number;
+  y: number;
+  /** Part of the map it's in. */
+  area: number;
+  kind: "ladder" | "sun" | "manual";
+  /** Its ladder or sun, as (u, v) in the tile. */
+  uv?: [number, number];
+  /** Where it leads (sub-area names), or the label of a manual entrance. */
+  to: string;
 }
 
 export function dataUrl(path: string): string {

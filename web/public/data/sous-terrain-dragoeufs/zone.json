@@ -1899,5 +1899,40 @@
       26
     ]
   ],
-  "client_subarea": 316
+  "client_subarea": 316,
+  "entrances": [
+    {
+      "x": -3,
+      "y": 24,
+      "area": 0,
+      "kind": "sun",
+      "uv": [
+        0.036,
+        0.719
+      ],
+      "to": "Sanctuaire des Dragoeufs, Village des Dragoeufs"
+    },
+    {
+      "x": -3,
+      "y": 24,
+      "area": 1,
+      "kind": "sun",
+      "uv": [
+        0.036,
+        0.969
+      ],
+      "to": "Sanctuaire des Dragoeufs, Village des Dragoeufs"
+    },
+    {
+      "x": -4,
+      "y": 25,
+      "area": 0,
+      "kind": "sun",
+      "uv": [
+        0.964,
+        0.031
+      ],
+      "to": "Sanctuaire des Dragoeufs, Village des Dragoeufs"
+    }
+  ]
 }

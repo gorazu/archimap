@@ -59,6 +59,8 @@ Add missing passages or remove wrong ones in the zone's file, as `[x1, y1, x2, y
 
 They are applied on every import. To apply them right away to an existing zone, run `uv run python -m archimap.corrections <zone>`.
 
+**Entrances**, where suggested walks start, are found in the map files: ladders and doors leading out of the zone, and suns facing a map outside it. Remove a wrong one with `"remove_entrances": [[x, y]]`, or add one the files can't show (an NPC, for example) with `"entrances": [{"x": -3, "y": 14, "label": "PNJ"}]` (`"area"` picks the part of a split map, 0 by default).
+
 ## Adding a gameplay recording (optional)
 
 A recording of the character walking through a zone gives the passages actually walked, and covers maps whose files the client can't read. Record the whole Dofus window (any size) with the **modern UI** option enabled and the **chat on the right side** of the window. Run from `pipeline/`:
@@ -94,7 +96,7 @@ bun run test       # unit tests
 
 The map is a plan with one tile per map, showing the map's layout: floor, walls, suns in yellow, and on split maps each part with an exit in its own colour. Solid lines are walking routes between a map's suns, dashed lines are map changes; the **Chemins** button shows or hides them.
 
-The **Parcours** button draws the shortest walk found through the maps not checked yet, numbered in visiting order, with the number of moves and of returns to a map already seen. It goes from sun to sun and takes split maps into account (each part has to be reached through its own suns). Maps that can't be reached from inside the zone (Sous-terrain des Dragoeufs, where you have to go back up to the surface) are counted apart and left out of the walk.
+The **Parcours** button draws a short walk through the whole zone, starting at an entrance (▶), with maps numbered in visiting order and the number of moves and of returns to a map already seen. It goes from sun to sun and takes split maps into account (each part has to be reached through its own suns). A walk is planned from each entrance of the zone; the panel lists them, the shortest first, and the one you pick is remembered. The walk is computed once and doesn't change as you check maps: the stretch already done is dimmed and checked maps' numbers are greyed. Maps that can't be reached from inside the zone (Sous-terrain des Dragoeufs, where you have to go back up to the surface) are counted apart and left out of the walk.
 
 Click or tap a map to mark it checked. Hover (desktop) or tap (mobile) shows its coordinates. Progress is saved in the browser per zone, and **Nouvelle chasse** clears it. The selected zone is kept in the URL (`#zone-slug`), so you can link to it.
 
@@ -105,7 +107,7 @@ To try the app without game data, `uv run python -m archimap.mock` (from `pipeli
 In desktop Chrome or Edge, open a zone and click **Direct**, then **Démarrer la capture** and share the Dofus Retro window (any window size). Before starting, enable the **modern UI** option and place the **chat on the right side** of the window: the game area is found from the chat panel and UI bar borders. Archimap reads the coordinates about twice per second and checks each map you walk onto. The current map is outlined in blue and kept in view.
 
 - Live mode also reads the game's location line ("Bonta (**Egout de Bonta**) - Bontarien"). The sub-area in parentheses tells which zone you're in, so walking from one zone into another switches the map automatically (**Changer de zone automatiquement**, on by default). It also keeps maps from being checked while you walk on the surface above an underground zone, which has the same coordinates. When the line can't be read, the coordinates decide.
-- Live mode guides you along that walk, replanned from where you are: the panel says which sun to click next ("soleil en bas à droite → [-26,-57]"), and that sun pulses on the map.
+- Live mode guides you along the chosen walk: the panel says which sun to click next ("soleil en bas à droite → [-26,-57]"), and that sun pulses on the map. If you leave the walk, it shows the shortest way back to the next map to check ("Retour au parcours : …") without changing the walk.
 - A position is confirmed after a few identical readings in a row (the **Stabilité** setting). A jump to a map that isn't next to the current one (teleport) needs twice as many.
 - The panel shows what OCR reads and the crop it reads from, which helps when something looks off. **Recalibrer** finds the layout again, for example after changing the interface.
 - Nothing is uploaded. Tesseract.js downloads its OCR engine and English data from a CDN the first time.

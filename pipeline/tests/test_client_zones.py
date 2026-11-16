@@ -99,3 +99,15 @@ def test_find_client_data_picks_the_newest_cache_in_the_language(tmp_path, monke
     assert client_zones.find_client_data("fr") == caches[("New", "1")]
     assert client_zones.find_client_data("en") == caches[("New", "0")]
     assert client_zones.find_client_data(None) == caches[("New", "0")]
+
+
+def test_manual_and_removed_entrances(tmp_path):
+    from archimap.client_maps import Entrance
+    from archimap.client_zones import zone_entrances
+    client = fake_client(tmp_path)
+    found = [Entrance((0, 0), 0, (0.5, 0.4), "ladder", (0, 0)), Entrance((1, 0), 0, (0.9, 0.5), "sun", (2, 0))]
+    config = {"remove_entrances": [[1, 0]], "entrances": [{"x": 1, "y": 1, "label": "PNJ"}]}
+    assert zone_entrances(found, config, client, 7) == [
+        {"x": 0, "y": 0, "area": 0, "kind": "ladder", "uv": [0.5, 0.4], "to": ""},
+        {"x": 1, "y": 1, "area": 0, "kind": "manual", "to": "PNJ"},
+    ]

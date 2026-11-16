@@ -425,3 +425,37 @@ def read_layouts(maps: dict[Coords, list[int]], maps_dir: Path) -> dict[Coords, 
         if path:
             layouts[coords] = map_layout(swf_variables(path))
     return layouts
+
+
+@dataclass(frozen=True)
+class Entrance:
+    """A way into the zone: a ladder or door, or a sun leading out of the zone."""
+    coords: Coords
+    area: int
+    uv: tuple[float, float] | None
+    kind: str  # "ladder" or "sun"
+    towards: Coords  # where it leads: the same cell for a ladder, the neighbour for a sun
+
+
+def find_entrances(areas: dict[Coords, list[Area]], passages: list[Passage]) -> list[Entrance]:
+    """Exits leading out of the zone. A sun that also faces a connected map
+    of the zone isn't one: a sun in a corner counts on two sides."""
+    connected = {(p.a[0], p.b[0]) for p in passages} | {(p.b[0], p.a[0]) for p in passages}
+    used = set()
+    for (x, y), parts in areas.items():
+        for area in parts:
+            for e in area.exits:
+                dx, dy = SIDES[e.side]
+                if ((x, y), (x + dx, y + dy)) in connected:
+                    used.add(((x, y), e.uv))
+    found: dict[tuple, Entrance] = {}
+    for (x, y), parts in areas.items():
+        for i, area in enumerate(parts):
+            for e in area.exits:
+                dx, dy = SIDES[e.side]
+                towards = (x + dx, y + dy)
+                if towards in areas or ((x, y), e.uv) in used:
+                    continue
+                kind = "ladder" if e.inner else "sun"
+                found.setdefault(((x, y), e.uv), Entrance((x, y), i, e.uv, kind, (x, y) if e.inner else towards))
+    return sorted(found.values(), key=lambda e: (e.coords[1], e.coords[0], e.uv or ()))

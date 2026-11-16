@@ -5,7 +5,7 @@
 // a travelling salesman problem); greedy nearest-map walks from every start,
 // improved by reversing stretches of the visiting order (2-opt) and moving
 // single maps in it (or-opt), get close.
-import { mapKey, zoneLinks, type Zone } from "./zones";
+import { mapKey, zoneLinks, type Zone, type ZoneEntrance } from "./zones";
 
 export interface RouteNode {
   map: string; // "x,y"
@@ -203,6 +203,134 @@ export function planRoute(g: ZoneGraph, targets: Set<string>, starts?: number[])
     }
   }
   return expand(g, best!, targets);
+}
+
+/** Small seeded random generator (mulberry32): same zone, same route. */
+function seeded(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Best visiting order found from a fixed start: greedy walk, improved, then
+ * many tries of moving a short stretch of it elsewhere and improving again,
+ * keeping the shortest (iterated local search). Worth it for a route that is
+ * computed once: about 10% shorter than improving the greedy walk alone.
+ */
+function searchFrom(g: ZoneGraph, start: number, targets: Set<string>, tries: number, seed: number): number[] {
+  const random = seeded(seed);
+  let best = improve(g, greedyTour(g, start, targets));
+  let bestCost = tourCost(g, best);
+  for (let k = 0; k < tries && best.length > 3; k++) {
+    const t = [...best];
+    const length = 1 + Math.floor(random() * Math.min(6, t.length - 2));
+    const from = 1 + Math.floor(random() * (t.length - length));
+    const stretch = t.splice(from, length);
+    t.splice(1 + Math.floor(random() * (t.length - 1 + 1)), 0, ...stretch);
+    const candidate = improve(g, t);
+    const cost = tourCost(g, candidate);
+    if (cost < bestCost) {
+      best = candidate;
+      bestCost = cost;
+    }
+  }
+  return best;
+}
+
+export interface EntranceRoute {
+  /** null: the zone has no known entrance, the route starts where it's shortest. */
+  entrance: ZoneEntrance | null;
+  route: Route;
+}
+
+/**
+ * A route over the whole zone from each entrance, best first (most maps
+ * reached, then fewest moves). Computed once per zone; progress along it
+ * then comes from the maps checked (routeProgress), not from replanning.
+ */
+export function planEntrances(zone: Zone, g: ZoneGraph, tries = 200): EntranceRoute[] {
+  const targets = new Set(zone.maps.map((m) => mapKey(m.x, m.y)));
+  const results: EntranceRoute[] = [];
+  for (const [k, entrance] of (zone.entrances ?? []).entries()) {
+    const map = mapKey(entrance.x, entrance.y);
+    const node = g.nodes.findIndex((n) => n.map === map && n.area === entrance.area);
+    const start = node !== -1 ? node : g.nodes.findIndex((n) => n.map === map);
+    if (start === -1) continue;
+    results.push({ entrance, route: expand(g, searchFrom(g, start, targets, tries, 1 + k), targets) });
+  }
+  if (results.length === 0) {
+    const route = planRoute(g, targets);
+    if (route) results.push({ entrance: null, route });
+  }
+  return results.sort((a, b) => b.route.order.length - a.route.order.length || a.route.steps.length - b.route.steps.length);
+}
+
+export interface Progress {
+  /** Map nodes along the route: the start, then where each step leads. */
+  sequence: number[];
+  /** The first map of the route's order not checked yet (null: all done). */
+  nextGoal: string | null;
+  /** Positions in `sequence` of the previous goal and of the next one. */
+  fromIndex: number;
+  goalIndex: number;
+}
+
+export function routeProgress(route: Route, checked: ReadonlySet<string>, g: ZoneGraph): Progress {
+  const sequence = [route.start, ...route.steps.map((s) => s.to)];
+  const firstVisit = new Map<string, number>();
+  sequence.forEach((node, i) => {
+    if (!firstVisit.has(g.nodes[node].map)) firstVisit.set(g.nodes[node].map, i);
+  });
+  const k = route.order.findIndex((m) => !checked.has(m));
+  if (k === -1) return { sequence, nextGoal: null, fromIndex: sequence.length - 1, goalIndex: sequence.length - 1 };
+  return {
+    sequence,
+    nextGoal: route.order[k],
+    fromIndex: k === 0 ? 0 : firstVisit.get(route.order[k - 1])!,
+    goalIndex: firstVisit.get(route.order[k])!,
+  };
+}
+
+export interface Guidance {
+  /** The move to make now (null: nothing left, or no way from here). */
+  step: RouteStep | null;
+  /** Off the route: the step leads back to it. */
+  detour: boolean;
+  /** Moves left until the end of the route. */
+  remaining: number;
+}
+
+/**
+ * The next move from where the player is (`here`: the nodes of their map,
+ * the part they entered by first). On the stretch leading to the next goal,
+ * it is the route's own next step; elsewhere, the shortest way back to that
+ * goal. The route itself never changes.
+ */
+export function guideFrom(route: Route, progress: Progress, g: ZoneGraph, here: number[]): Guidance {
+  const n = g.nodes.length;
+  if (!progress.nextGoal) return { step: null, detour: false, remaining: 0 };
+  const { sequence, fromIndex, goalIndex } = progress;
+  for (let i = goalIndex - 1; i >= fromIndex; i--) {
+    if (here.includes(sequence[i])) {
+      return { step: route.steps[i], detour: false, remaining: route.steps.length - i };
+    }
+  }
+  const goal = sequence[goalIndex];
+  const reachable = here.filter((h) => g.dist[h * n + goal] > 0);
+  if (reachable.length === 0) return { step: null, detour: true, remaining: route.steps.length - goalIndex };
+  const from = reachable.reduce((a, b) => (g.dist[b * n + goal] < g.dist[a * n + goal] ? b : a));
+  const path = pathBetween(g, from, goal);
+  return {
+    step: g.edges.get(path[0])!.get(path[1])!,
+    detour: true,
+    remaining: g.dist[from * n + goal] + route.steps.length - goalIndex,
+  };
 }
 
 /** Where a sun is in the tile, in words, for the live guide ("en bas à gauche"). */

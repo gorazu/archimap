@@ -3,8 +3,8 @@ import { memo, useEffect, useMemo } from "react";
 import { Circle, ImageOverlay, MapContainer, Marker, Pane, Polyline, Rectangle, Tooltip, useMap, useMapEvent } from "react-leaflet";
 import { TILE_HEIGHT, tileBounds, tileWidth, zoneBounds, type Bounds } from "../data/geometry";
 import { drawLayout } from "../data/layout";
-import { planShapes, routeShapes } from "../data/plan";
-import type { Route, ZoneGraph } from "../data/route";
+import { leavePoint, planShapes, routeShapes } from "../data/plan";
+import type { EntranceRoute, Progress, RouteStep, ZoneGraph } from "../data/route";
 import { mapKey, type MapEntry, type Zone } from "../data/zones";
 import type { CheckedSet } from "../progress/progressStore";
 
@@ -28,6 +28,7 @@ const PLAN_NODE: L.PathOptions = { stroke: false, fillColor: "#f1e4c2", fillOpac
 const ROUTE_LINE: L.PathOptions = {
   color: "#4fc3ff", weight: 4, opacity: 0.9, lineCap: "round", lineJoin: "round", interactive: false,
 };
+const ROUTE_DONE: L.PathOptions = { ...ROUTE_LINE, opacity: 0.3 };
 const NEXT_SUN: L.PathOptions = {
   color: "#4fc3ff", weight: 3, fillColor: "#ffc94d", fillOpacity: 1, interactive: false, className: "next-sun",
 };
@@ -50,17 +51,22 @@ interface Props {
   /** Draw the paths (walking routes and map changes). */
   showPaths: boolean;
   onShowPathsChange: (show: boolean) => void;
-  /** Draw the suggested walk over the maps not checked yet. */
+  /** Draw the suggested walk through the zone. */
   showRoute: boolean;
   onShowRouteChange: (show: boolean) => void;
-  route: Route | null;
+  /** One route per entrance, best first, and the one followed. */
+  plans: EntranceRoute[] | null;
+  plan: EntranceRoute | null;
+  onChooseEntrance: (plan: EntranceRoute) => void;
+  progress: Progress | null;
   graph: ZoneGraph | null;
-  /** Live capture is guiding the player: highlight the next sun. */
-  guiding: boolean;
+  /** Live capture guiding the player: the move to make now, its sun highlighted. */
+  nextStep: RouteStep | null;
 }
 
 export function ZoneMap({
-  zone, checked, onToggle, current, showPaths, onShowPathsChange, showRoute, onShowRouteChange, route, graph, guiding,
+  zone, checked, onToggle, current, showPaths, onShowPathsChange, showRoute, onShowRouteChange,
+  plans, plan, onChooseEntrance, progress, graph, nextStep,
 }: Props) {
   const bounds = useMemo(() => zoneBounds(zone.maps, zone.tile_size), [zone]);
   return (
@@ -82,9 +88,10 @@ export function ZoneMap({
       >
         <FitOnResize bounds={bounds} />
         <PlanLayer zone={zone} showPaths={showPaths} />
-        {route && graph && (showRoute || guiding) && (
-          <RouteLayer zone={zone} graph={graph} route={route} numbered={showRoute} nextSun={guiding} />
+        {plan && graph && progress && showRoute && (
+          <RouteLayer zone={zone} graph={graph} plan={plan} progress={progress} checked={checked} />
         )}
+        {nextStep && graph && <NextSun point={leavePoint(zone, graph, nextStep)} />}
         {zone.maps.map((entry) => {
           const key = mapKey(entry.x, entry.y);
           return (
@@ -108,7 +115,9 @@ export function ZoneMap({
             Parcours
           </button>
         </div>
-        {showRoute && <RouteSummary route={route} />}
+        {showRoute && plans && plan && progress && (
+          <RoutePanel plans={plans} plan={plan} progress={progress} onChoose={onChooseEntrance} />
+        )}
       </div>
     </>
   );
@@ -171,43 +180,93 @@ const PlanLayer = memo(function PlanLayer({ zone, showPaths }: { zone: Zone; sho
   );
 });
 
-/** The suggested walk: a line from sun to sun, maps numbered in visiting order. */
-function RouteLayer({ zone, graph, route, numbered, nextSun }: {
-  zone: Zone; graph: ZoneGraph; route: Route; numbered: boolean; nextSun: boolean;
+/**
+ * The suggested walk: a line from sun to sun, maps numbered in visiting
+ * order, the entrance marked. The part already walked (up to the last map
+ * checked in order) is dimmed.
+ */
+function RouteLayer({ zone, graph, plan, progress, checked }: {
+  zone: Zone; graph: ZoneGraph; plan: EntranceRoute; progress: Progress; checked: CheckedSet;
 }) {
-  const shapes = useMemo(() => routeShapes(zone, graph, route), [zone, graph, route]);
+  const shapes = useMemo(() => routeShapes(zone, graph, plan.route), [zone, graph, plan]);
+  const split = 2 * progress.fromIndex; // line point where the stretch to the next goal begins
   const icons = useMemo(
-    () => shapes.numbers.map((n) => L.divIcon({ className: "route-step", html: n.label, iconSize: [20, 20] })),
-    [shapes],
+    () => shapes.numbers.map((n, i) =>
+      L.divIcon({
+        className: `route-step${checked.has(n.map) ? " done" : ""}${i === 0 ? " entrance" : ""}`,
+        html: i === 0 && plan.entrance ? "▶" : n.label,
+        iconSize: [20, 20],
+      }),
+    ),
+    [shapes, checked, plan],
   );
   return (
     <Pane name="route" style={{ zIndex: 360 }}>
-      <Polyline positions={shapes.line} pathOptions={ROUTE_LINE} />
-      {numbered &&
-        shapes.numbers.map((n, i) => (
-          <Marker key={`step${i}`} position={n.position} icon={icons[i]} interactive={false} keyboard={false} pane="markerPane" />
-        ))}
-      {nextSun && shapes.nextSun && (
-        <Circle center={shapes.nextSun} radius={TILE_HEIGHT * 0.07} pathOptions={NEXT_SUN} />
-      )}
+      {split > 0 && <Polyline positions={shapes.line.slice(0, split + 1)} pathOptions={ROUTE_DONE} />}
+      <Polyline positions={shapes.line.slice(split)} pathOptions={ROUTE_LINE} />
+      {shapes.numbers.map((n, i) => (
+        <Marker key={`step${i}`} position={n.position} icon={icons[i]} interactive={false} keyboard={false} pane="markerPane" />
+      ))}
     </Pane>
   );
 }
 
-function RouteSummary({ route }: { route: Route | null }) {
-  if (!route) return <p className="route-summary">Toutes les cartes sont vérifiées.</p>;
-  const moves = route.steps.length;
-  const repeats = moves + 1 - route.order.length;
+function NextSun({ point }: { point: [number, number] }) {
   return (
-    <p className="route-summary">
-      {moves} déplacement{moves > 1 ? "s" : ""} · {repeats} retour{repeats > 1 ? "s" : ""} sur une carte déjà vue
-      {route.unreachable.length > 0 && (
-        <>
-          <br />
-          {route.unreachable.length} carte{route.unreachable.length > 1 ? "s" : ""} hors d'atteinte depuis la zone
-        </>
+    <Pane name="next-sun" style={{ zIndex: 370 }}>
+      <Circle center={point} radius={TILE_HEIGHT * 0.07} pathOptions={NEXT_SUN} />
+    </Pane>
+  );
+}
+
+const ENTRANCE_KIND = { ladder: "échelle", sun: "soleil", manual: "entrée" } as const;
+
+function RoutePanel({ plans, plan, progress, onChoose }: {
+  plans: EntranceRoute[]; plan: EntranceRoute; progress: Progress; onChoose: (plan: EntranceRoute) => void;
+}) {
+  const most = plans[0].route.order.length;
+  const moves = plan.route.steps.length;
+  const repeats = moves + 1 - plan.route.order.length;
+  const goal = progress.nextGoal;
+  const done = goal ? plan.route.order.indexOf(goal) : plan.route.order.length;
+  return (
+    <div className="route-panel">
+      {plans[0].entrance && (
+        <fieldset>
+          <legend>Entrée</legend>
+          {plans.map((p, i) => {
+            const e = p.entrance!;
+            const reach = p.route.order.length;
+            return (
+              <label key={i}>
+                <input type="radio" name="entrance" checked={p === plan} onChange={() => onChoose(p)} />
+                <span>
+                  [{e.x},{e.y}] {ENTRANCE_KIND[e.kind]}
+                  {e.to && <small> → {e.to}</small>}
+                  <br />
+                  <small>
+                    {reach < most ? `seulement ${reach} carte${reach > 1 ? "s" : ""}` : `${p.route.steps.length} déplacements`}
+                    {i === 0 && " · la plus courte"}
+                  </small>
+                </span>
+              </label>
+            );
+          })}
+        </fieldset>
       )}
-    </p>
+      <p>
+        {moves} déplacements · {repeats} retour{repeats > 1 ? "s" : ""} sur une carte déjà vue
+        <br />
+        {goal ? `${done} / ${plan.route.order.length} · prochaine carte [${goal}]` : "Parcours terminé !"}
+        {plan.route.unreachable.length > 0 && (
+          <>
+            <br />
+            {plan.route.unreachable.length} carte{plan.route.unreachable.length > 1 ? "s" : ""} hors d'atteinte depuis
+            cette entrée
+          </>
+        )}
+      </p>
+    </div>
   );
 }
 

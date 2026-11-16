@@ -716,5 +716,40 @@
         0.094
       ]
     }
+  ],
+  "entrances": [
+    {
+      "x": 4,
+      "y": -20,
+      "area": 0,
+      "kind": "sun",
+      "uv": [
+        0.036,
+        0.656
+      ],
+      "to": "Cité d'Astrub, Souterrain profond d'Astrub"
+    },
+    {
+      "x": 5,
+      "y": -20,
+      "area": 1,
+      "kind": "sun",
+      "uv": [
+        0.964,
+        0.594
+      ],
+      "to": "Cité d'Astrub"
+    },
+    {
+      "x": 6,
+      "y": -19,
+      "area": 0,
+      "kind": "sun",
+      "uv": [
+        0.179,
+        0.969
+      ],
+      "to": "Cité d'Astrub, Souterrain du Château d'Amakna"
+    }
   ]
 }

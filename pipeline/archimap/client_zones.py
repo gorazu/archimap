@@ -25,7 +25,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .client_maps import find_maps_dir, read_layouts, sun_passages
+from .client_maps import find_entrances, find_maps_dir, read_layouts, sun_passages
 from .corrections import apply_link_corrections
 from .export import update_zone_index
 from .sol import read_sol
@@ -89,6 +89,32 @@ def neighbour_links(cells: set[Coords]) -> list[tuple[Coords, Coords]]:
     return sorted(((x, y), n) for x, y in cells for n in ((x + 1, y), (x, y + 1)) if n in cells)
 
 
+def zone_entrances(found, config: dict, client: ClientData, subarea: int) -> list[dict]:
+    """Entrances for zone.json: detected ones (minus "remove_entrances"), each
+    with the names of the sub-areas it leads to, plus "entrances" listed by
+    hand in the zone's config (an NPC, for example)."""
+    names: dict[Coords, set[str]] = {}
+    for sid, maps in client.maps.items():
+        for _, coords in maps:
+            names.setdefault(coords, set()).add(client.subareas[sid][0])
+    removed = {tuple(c) for c in config.get("remove_entrances", [])}
+    out = []
+    for e in found:
+        if e.coords in removed:
+            continue
+        # Names starting with "//" are the game's internal ones ("//Bonta"): keep them, cleaned.
+        towards = sorted({n.lstrip("/") for n in names.get(e.towards, set()) - {client.subareas[subarea][0]}})
+        entry = {"x": e.coords[0], "y": e.coords[1], "area": e.area, "kind": e.kind,
+                 **({"uv": list(e.uv)} if e.uv else {}), "to": ", ".join(towards)}
+        # Two ladders of one room to the same place are one entrance.
+        if not any((o["x"], o["y"], o["area"], o["kind"], o["to"]) == (entry["x"], entry["y"], entry["area"], entry["kind"], entry["to"])
+                   for o in out):
+            out.append(entry)
+    for e in config.get("entrances", []):
+        out.append({"x": e["x"], "y": e["y"], "area": e.get("area", 0), "kind": "manual", "to": e.get("label", "")})
+    return out
+
+
 def build_zone(slug: str, config: dict, client: ClientData, existing: dict | None,
                config_path: Path, maps_dir: Path | None = None) -> tuple[dict, list[str]]:
     """zone.json content for a configured zone, merged with a recorded one if any.
@@ -142,6 +168,7 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
         # The map's own layout (floor, walls, suns), drawn inside its plan tile.
         if (m["x"], m["y"]) in layouts:
             m["layout"] = layouts[(m["x"], m["y"])]
+    zone["entrances"] = zone_entrances(find_entrances(areas, passages), config, client, subarea)
     zone["passages"] = [{"a": [*p.a[0], p.a[1]], "b": [*p.b[0], p.b[1]], "t": p.t,
                          **({"ua": list(p.ua)} if p.ua else {}), **({"ub": list(p.ub)} if p.ub else {})}
                         for p in passages]

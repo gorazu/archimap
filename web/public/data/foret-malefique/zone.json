@@ -10594,5 +10594,18 @@
         0.062
       ]
     }
+  ],
+  "entrances": [
+    {
+      "x": -3,
+      "y": 14,
+      "area": 0,
+      "kind": "sun",
+      "uv": [
+        0.964,
+        0.719
+      ],
+      "to": "Bord de la fôret maléfique"
+    }
   ]
 }

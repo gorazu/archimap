@@ -3098,5 +3098,40 @@
         0.062
       ]
     }
+  ],
+  "entrances": [
+    {
+      "x": 6,
+      "y": -18,
+      "area": 0,
+      "kind": "sun",
+      "uv": [
+        0.214,
+        0.062
+      ],
+      "to": "Cité d'Astrub, Souterrain d'Astrub"
+    },
+    {
+      "x": 6,
+      "y": -7,
+      "area": 0,
+      "kind": "sun",
+      "uv": [
+        0.964,
+        0.719
+      ],
+      "to": "Port de Madrestam, Souterrains d'Amakna"
+    },
+    {
+      "x": 6,
+      "y": -5,
+      "area": 0,
+      "kind": "ladder",
+      "uv": [
+        0.75,
+        0.844
+      ],
+      "to": "Le château d'Amakna"
+    }
   ]
 }

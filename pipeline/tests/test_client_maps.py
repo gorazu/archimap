@@ -1,7 +1,7 @@
 import struct
 import zlib
 
-from archimap.client_maps import (Area, Exit, map_areas, map_layout, passages_between, plain_map_file,
+from archimap.client_maps import (Area, Exit, find_entrances, map_areas, map_layout, passages_between, plain_map_file,
                                   read_cells, sun_links, swf_variables)
 
 HASH = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
@@ -141,3 +141,15 @@ def test_passages_record_the_suns_on_each_side():
              (1, 0): [Area((0.5, 0.5), [Exit("left", 0.03, uv=(0.03, 0.03))])]}
     (p,) = passages_between(areas)
     assert (p.ua, p.ub) == ((0.97, 0.4), (0.03, 0.03))
+
+
+def test_entrances_are_exits_leading_out_of_the_zone():
+    areas = {(0, 0): [Area((0.5, 0.5), [Exit("right", 0.5, uv=(0.97, 0.5)),
+                                         Exit("top", 0.97, uv=(0.97, 0.03)),       # corner sun...
+                                         Exit("right", 0.03, uv=(0.97, 0.03)),     # ...also on the right
+                                         Exit("top", 0.5, inner=True, uv=(0.5, 0.4))])],  # ladder
+             (1, 0): [Area((0.5, 0.5), [Exit("left", 0.03, uv=(0.03, 0.03))])]}
+    passages = passages_between(areas)
+    found = find_entrances(areas, passages)
+    # The corner sun serves the passage to (1,0): not an entrance. The ladder is.
+    assert [(e.coords, e.kind, e.towards) for e in found] == [((0, 0), "ladder", (0, 0))]

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { buildGraph, describePosition, planRoute } from "./route";
+import { buildGraph, describePosition, guideFrom, planEntrances, planRoute, routeProgress } from "./route";
 import type { Zone } from "./zones";
 
 const zone = (cells: [number, number][], links: [number, number, number, number][], extra: Partial<Zone> = {}): Zone => ({
@@ -75,4 +75,47 @@ test("sun positions in words", () => {
   expect(describePosition([0.5, 0.05])).toBe("en haut au centre");
   expect(describePosition([0.95, 0.5])).toBe("au milieu à droite");
   expect(describePosition([0.5, 0.5])).toBe("au centre");
+});
+
+const line = (n: number): Zone =>
+  zone(Array.from({ length: n }, (_, i) => [i, 0] as [number, number]),
+       Array.from({ length: n - 1 }, (_, i) => [i, 0, i + 1, 0] as [number, number, number, number]));
+
+test("routes start at the zone's entrances, best first", () => {
+  const z = { ...line(5), entrances: [
+    { x: 2, y: 0, area: 0, kind: "ladder" as const, to: "Surface" },
+    { x: 0, y: 0, area: 0, kind: "sun" as const, to: "Elsewhere" },
+  ] };
+  const plans = planEntrances(z, buildGraph(z));
+  expect(plans.map((p) => [p.entrance!.x, p.route.steps.length])).toEqual([[0, 4], [2, 6]]);
+});
+
+test("without entrances, the route starts where it's shortest", () => {
+  const plans = planEntrances(line(3), buildGraph(line(3)));
+  expect(plans).toHaveLength(1);
+  expect(plans[0].entrance).toBeNull();
+  expect(plans[0].route.steps).toHaveLength(2);
+});
+
+test("progress follows the checked maps, the route stays the same", () => {
+  const z = line(4);
+  const g = buildGraph(z);
+  const route = planRoute(g, all(z), [g.nodes.findIndex((n) => n.map === "0,0")])!;
+  expect(routeProgress(route, new Set(), g).nextGoal).toBe("0,0");
+  const p = routeProgress(route, new Set(["0,0", "1,0"]), g);
+  expect([p.nextGoal, p.fromIndex, p.goalIndex]).toEqual(["2,0", 1, 2]);
+  expect(routeProgress(route, all(z), g).nextGoal).toBeNull();
+});
+
+test("the guide follows the route, or leads back to it", () => {
+  const z = line(4);
+  const g = buildGraph(z);
+  const node = (m: string) => g.nodes.findIndex((n) => n.map === m);
+  const route = planRoute(g, all(z), [node("0,0")])!;
+  const progress = routeProgress(route, new Set(["0,0", "1,0"]), g);
+  const onRoute = guideFrom(route, progress, g, [node("1,0")]);
+  expect([g.nodes[onRoute.step!.to].map, onRoute.detour, onRoute.remaining]).toEqual(["2,0", false, 2]);
+  const off = guideFrom(route, progress, g, [node("0,0")]); // went back: lead to the next goal
+  expect([g.nodes[off.step!.to].map, off.detour, off.remaining]).toEqual(["1,0", true, 3]);
+  expect(guideFrom(route, routeProgress(route, all(z), g), g, [node("3,0")]).step).toBeNull();
 });

@@ -733,5 +733,18 @@
         0.594
       ]
     }
+  ],
+  "entrances": [
+    {
+      "x": 3,
+      "y": -20,
+      "area": 0,
+      "kind": "sun",
+      "uv": [
+        0.964,
+        0.656
+      ],
+      "to": "Cité d'Astrub, Souterrain d'Astrub"
+    }
   ]
 }
