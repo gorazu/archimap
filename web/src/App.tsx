@@ -2,7 +2,9 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "r
 import { Header } from "./components/Header";
 import { LivePanel } from "./components/LivePanel";
 import { ZoneMap } from "./components/ZoneMap";
-import { fetchZone, fetchZoneIndex, mapKey, type Zone, type ZoneSummary } from "./data/zones";
+import {
+  fetchZone, fetchZoneIndex, isSelection, mapKey, partOf, splitSelection, zonePart, type Zone, type ZoneSummary,
+} from "./data/zones";
 import {
   buildGraph, describePosition, guideFrom, planEntrances, routeProgress,
   type EntranceRoute, type Guidance, type Progress, type ZoneGraph,
@@ -56,7 +58,7 @@ function initialZone(zones: ZoneSummary[]): string | null {
     // Ignore blocked storage.
   }
   for (const slug of [fromHash, last]) {
-    if (slug && zones.some((z) => z.zone === slug)) return slug;
+    if (slug && isSelection(zones, slug)) return slug;
   }
   return zones[0]?.zone ?? null;
 }
@@ -95,6 +97,7 @@ function storedEntrance(zone: string): string | null {
 
 export function App() {
   const [zones, setZones] = useState<ZoneSummary[] | null>(null);
+  // The zone picked, or one part of it: "zone/part".
   const [slug, setSlug] = useState<string | null>(null);
   // Every zone is loaded up front: live capture needs them all to tell where the player is.
   const [zoneData, setZoneData] = useState<Map<string, Zone> | null>(null);
@@ -112,13 +115,19 @@ export function App() {
       })
       .catch((e: Error) => setError(e.message));
   }, []);
-  const zone = (slug && zoneData?.get(slug)) || null;
+  const { zone: zoneSlug, part: partSlug } = slug ? splitSelection(slug) : { zone: null, part: null };
+  const fullZone = (zoneSlug && zoneData?.get(zoneSlug)) || null;
+  // A part shown alone: its maps only, its progress shared with the whole zone.
+  const zone = useMemo(() => {
+    const part = fullZone?.parts?.find((p) => p.part === partSlug);
+    return fullZone && part ? zonePart(fullZone, part) : fullZone;
+  }, [fullZone, partSlug]);
 
   // Follow #zone links to another zone without a reload.
   useEffect(() => {
     const onHash = () => {
       const target = decodeURIComponent(location.hash.slice(1));
-      if (zones?.some((z) => z.zone === target)) setSlug(target);
+      if (zones && isSelection(zones, target)) setSlug(target);
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -126,18 +135,18 @@ export function App() {
 
   useEffect(() => {
     if (!slug) return;
-    history.replaceState(null, "", `#${encodeURIComponent(slug)}`);
+    history.replaceState(null, "", `#${slug.split("/").map(encodeURIComponent).join("/")}`);
     rememberZone(slug);
   }, [slug]);
 
-  const { checked, toggle, reset } = useProgress(slug ?? "");
+  const { checked, toggle, reset } = useProgress(zoneSlug ?? "");
   const store = useContext(ProgressStoreContext);
 
   const lookups: ZoneLookup[] = useMemo(
     () =>
       (zones ?? []).map((z) => ({
         zone: z.zone,
-        subarea: z.subarea,
+        subareas: z.parts ? z.parts.map((p) => p.subarea) : z.subarea ? [z.subarea] : [],
         maps: new Set(zoneData?.get(z.zone)?.maps.map((m) => mapKey(m.x, m.y))),
       })),
     [zones, zoneData],
@@ -147,12 +156,14 @@ export function App() {
   const [liveOpen, setLiveOpen] = useState(false);
   const { position, location: gameLocation } = live.state;
   const positionKey = position ? mapKey(position[0], position[1]) : null;
-  const positionZone = positionKey ? resolveZone(positionKey, gameLocation, slug, lookups) : null;
-  const current = positionZone === slug ? positionKey : null;
+  const positionZone = positionKey ? resolveZone(positionKey, gameLocation, zoneSlug, lookups) : null;
+  const shown = useMemo(() => new Set(zone?.maps.map((m) => mapKey(m.x, m.y))), [zone]);
+  const current = positionZone === zoneSlug && positionKey && shown.has(positionKey) ? positionKey : null;
 
   // Check the map the player is on, in its own zone, and follow them into
   // another zone. Only once per position: picking a zone by hand during a
-  // capture isn't undone until the player moves.
+  // capture isn't undone until the player moves. Showing one part of a
+  // zone, follow them into its other parts too.
   const handled = useRef("");
   useEffect(() => {
     if (!positionKey || !positionZone) return;
@@ -162,8 +173,10 @@ export function App() {
     if (lookups.find((z) => z.zone === positionZone)?.maps.has(positionKey)) {
       store.set(positionZone, positionKey, true);
     }
-    if (positionZone !== slug && live.options.autoZone) setSlug(positionZone);
-  }, [positionKey, positionZone, lookups, store, slug, live.options.autoZone]);
+    const part = partSlug ? partOf(zoneData!.get(positionZone)!, positionKey) : null;
+    const target = part ? `${positionZone}/${part.part}` : positionZone;
+    if (target !== slug && (positionZone !== zoneSlug || part) && live.options.autoZone) setSlug(target);
+  }, [positionKey, positionZone, lookups, store, slug, zoneSlug, partSlug, zoneData, live.options.autoZone]);
 
   // The map the live player was on before the current one: on a split map,
   // it tells which part they came in by.
@@ -214,13 +227,14 @@ export function App() {
     [zone, checked],
   );
 
+  // Clears the whole zone, even when showing one part of it.
   const onNewHunt = useCallback(() => {
-    if (zone && confirm(
-      `Nouvelle chasse : décocher ${checkedCount > 1 ? `les ${checkedCount} cartes vérifiées` : "la carte vérifiée"} de « ${zone.name} » ?`,
-    )) {
+    if (!fullZone) return;
+    const count = fullZone.maps.filter((m) => checked.has(mapKey(m.x, m.y))).length;
+    if (confirm(`Nouvelle chasse : décocher ${count > 1 ? `les ${count} cartes vérifiées` : "la carte vérifiée"} de « ${fullZone.name} » ?`)) {
       reset();
     }
-  }, [zone, checkedCount, reset]);
+  }, [fullZone, checked, reset]);
 
   return (
     <div className="app">

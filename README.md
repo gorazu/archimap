@@ -4,7 +4,7 @@ Interactive map of Dofus Retro zones (sewers, underground passages, labyrinth fo
 
 Zones are built from the **Dofus Retro client's own files**: the list of maps of each sub-area with their coordinates, and each map's layout (floor, walls and the suns that lead to the next map). A gameplay recording can be added on top, to confirm passages or to cover maps the client can't read.
 
-Current zones: Égouts de Bonta, Égouts de Brâkmar, Forêt maléfique, Sanctuaire des Dragoeufs, Sous-terrain des Dragoeufs, Souterrain d'Astrub, Souterrain profond d'Astrub, Souterrain du Château d'Amakna.
+Current zones: Égouts de Bonta, Égouts de Brâkmar, Forêt maléfique, Sanctuaire des Dragoeufs, Sous-terrain des Dragoeufs, and Souterrains d'Astrub (Souterrain d'Astrub, Souterrain profond d'Astrub and Souterrain du Château d'Amakna, checked as one zone).
 
 ## Setup
 
@@ -44,6 +44,23 @@ What comes from the client:
 
 Limits: only the unencrypted map files the client ships can be read. They are older versions of the maps (2005): exits match today's game, but decoration may differ. About 16% of maps have no such file (all of Caverne des Fungus, for example); those are joined to all their neighbours instead, which is why Caverne des Fungus isn't included.
 
+### Zones made of several sub-areas
+
+Sub-areas that lead into each other are better checked as one zone. List them as `parts` instead of `client_subarea`:
+
+```json
+{
+  "name": "Souterrains d'Astrub",
+  "parts": [
+    { "client_subarea": 99, "part": "souterrain-astrub", "name": "Souterrain d'Astrub" },
+    { "client_subarea": 100, "part": "souterrain-profond-astrub", "name": "Souterrain profond d'Astrub" },
+    { "client_subarea": 181, "part": "souterrain-chateau-amakna", "name": "Souterrain du Château d'Amakna" }
+  ]
+}
+```
+
+Each map keeps its game sub-area. In the web map the zone is listed with its parts below it (`#souterrains-astrub/souterrain-profond-astrub`), and every part shares the zone's progress. In live mode, the location line matches any of the parts.
+
 ### Fixing passages
 
 Add missing passages or remove wrong ones in the zone's file, as `[x1, y1, x2, y2]` pairs of neighbouring maps:
@@ -58,6 +75,8 @@ Add missing passages or remove wrong ones in the zone's file, as `[x1, y1, x2, y
 ```
 
 They are applied on every import. To apply them right away to an existing zone, run `uv run python -m archimap.corrections <zone>`.
+
+A sun can lead to a map that isn't its neighbour on that side (in Souterrain d'Astrub, the left sun of [6,-19] leads to [5,-20]). Add such passages with `"add_passages": [{"a": [6, -19, "left"], "b": [5, -20, "right"]}]`: each end is a map and the side of its sun, or just the map when there is no sun to come back by.
 
 **Entrances**, where suggested walks start, are found in the map files: ladders and doors leading out of the zone, and suns facing a map outside it. Remove a wrong one with `"remove_entrances": [[x, y]]`, or add one the files can't show (an NPC, for example) with `"entrances": [{"x": -3, "y": 14, "label": "PNJ"}]` (`"area"` picks the part of a split map, 0 by default).
 

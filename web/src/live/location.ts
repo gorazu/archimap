@@ -6,8 +6,8 @@
 
 export interface ZoneLookup {
   zone: string;
-  /** In-game sub-area name, from zones.json. */
-  subarea?: string;
+  /** In-game sub-area names, from zones.json (several for a zone made of several). */
+  subareas: string[];
   /** Map keys "x,y". */
   maps: ReadonlySet<string>;
 }
@@ -59,9 +59,10 @@ export function parseLocation(lines: string[]): string | null {
 export function matchSubarea(location: string, zones: ZoneLookup[], minSimilarity = 0.75): string | null {
   let best: { zone: string; score: number } | null = null;
   for (const z of zones) {
-    if (!z.subarea) continue;
-    const score = nameSimilarity(location, z.subarea);
-    if (!best || score > best.score) best = { zone: z.zone, score };
+    for (const subarea of z.subareas) {
+      const score = nameSimilarity(location, subarea);
+      if (!best || score > best.score) best = { zone: z.zone, score };
+    }
   }
   return best && best.score >= minSimilarity ? best.zone : null;
 }

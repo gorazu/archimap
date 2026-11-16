@@ -441,7 +441,8 @@ def find_entrances(areas: dict[Coords, list[Area]], passages: list[Passage]) -> 
     """Exits leading out of the zone. A sun that also faces a connected map
     of the zone isn't one: a sun in a corner counts on two sides."""
     connected = {(p.a[0], p.b[0]) for p in passages} | {(p.b[0], p.a[0]) for p in passages}
-    used = set()
+    # Suns of the passages themselves, including ones between maps that aren't neighbours.
+    used = {(p.a[0], p.ua) for p in passages if p.ua} | {(p.b[0], p.ub) for p in passages if p.ub}
     for (x, y), parts in areas.items():
         for area in parts:
             for e in area.exits:
@@ -459,3 +460,12 @@ def find_entrances(areas: dict[Coords, list[Area]], passages: list[Passage]) -> 
                 kind = "ladder" if e.inner else "sun"
                 found.setdefault(((x, y), e.uv), Entrance((x, y), i, e.uv, kind, (x, y) if e.inner else towards))
     return sorted(found.values(), key=lambda e: (e.coords[1], e.coords[0], e.uv or ()))
+
+
+def sun_on_side(areas: dict[Coords, list[Area]], coords: Coords, side: str) -> tuple[int, tuple[float, float] | None]:
+    """The area and the sun of a map's only exit on one side (for passages added by hand)."""
+    found = [(i, e.uv) for i, a in enumerate(areas.get(coords, [])) for e in a.exits
+             if e.side == side and not e.inner]
+    if len({uv for _, uv in found}) != 1:
+        raise ValueError(f"[{coords[0]},{coords[1]}] has {len(found)} suns on its {side} side, expected one")
+    return found[0]

@@ -19,22 +19,29 @@
       "subarea": "Sous terrain des Dragoeufs"
     },
     {
-      "zone": "souterrain-astrub",
-      "name": "Souterrain d'Astrub",
-      "maps": 6,
-      "subarea": "Souterrain d'Astrub"
-    },
-    {
-      "zone": "souterrain-chateau-amakna",
-      "name": "Souterrain du Château d'Amakna",
-      "maps": 26,
-      "subarea": "Souterrain du Château d'Amakna"
-    },
-    {
-      "zone": "souterrain-profond-astrub",
-      "name": "Souterrain profond d'Astrub",
-      "maps": 8,
-      "subarea": "Souterrain profond d'Astrub"
+      "zone": "souterrains-astrub",
+      "name": "Souterrains d'Astrub",
+      "maps": 40,
+      "parts": [
+        {
+          "part": "souterrain-astrub",
+          "name": "Souterrain d'Astrub",
+          "subarea": "Souterrain d'Astrub",
+          "maps": 6
+        },
+        {
+          "part": "souterrain-profond-astrub",
+          "name": "Souterrain profond d'Astrub",
+          "subarea": "Souterrain profond d'Astrub",
+          "maps": 8
+        },
+        {
+          "part": "souterrain-chateau-amakna",
+          "name": "Souterrain du Château d'Amakna",
+          "subarea": "Souterrain du Château d'Amakna",
+          "maps": 26
+        }
+      ]
     },
     {
       "zone": "egouts-de-bonta",

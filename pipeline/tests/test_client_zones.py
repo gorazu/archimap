@@ -57,6 +57,17 @@ def test_zone_from_client_joins_neighbours_and_applies_corrections(tmp_path):
     assert zone["links"] == [[1, 0, 1, 1]]  # (0,0)-(1,0) removed as a wall
 
 
+def test_zone_made_of_several_subareas(tmp_path):
+    client = fake_client(tmp_path)
+    config = {"name": "Tout", "parts": [{"client_subarea": 7, "part": "egout"},
+                                        {"client_subarea": 8, "part": "ailleurs", "name": "Là-bas"}]}
+    zone, _ = build_zone("tout", config, client, None, tmp_path / "none.json")
+    assert [(m["x"], m["y"], m["subarea"]) for m in zone["maps"]][-1] == (9, 9, "Ailleurs")
+    assert zone["parts"] == [{"part": "egout", "name": "Egout de Test", "subarea": "Egout de Test", "maps": 3},
+                             {"part": "ailleurs", "name": "Là-bas", "subarea": "Ailleurs", "maps": 1}]
+    assert "client_subarea" not in zone
+
+
 def test_recorded_zone_keeps_its_maps_and_gets_missing_ones(tmp_path):
     client = fake_client(tmp_path)
     recorded = {"zone": "egout", "name": "x", "source_video": "v.mkv", "tile_size": [100, 60],
@@ -107,7 +118,19 @@ def test_manual_and_removed_entrances(tmp_path):
     client = fake_client(tmp_path)
     found = [Entrance((0, 0), 0, (0.5, 0.4), "ladder", (0, 0)), Entrance((1, 0), 0, (0.9, 0.5), "sun", (2, 0))]
     config = {"remove_entrances": [[1, 0]], "entrances": [{"x": 1, "y": 1, "label": "PNJ"}]}
-    assert zone_entrances(found, config, client, 7) == [
+    assert zone_entrances(found, config, client, [7]) == [
         {"x": 0, "y": 0, "area": 0, "kind": "ladder", "uv": [0.5, 0.4], "to": ""},
         {"x": 1, "y": 1, "area": 0, "kind": "manual", "to": "PNJ"},
     ]
+
+
+def test_passages_added_by_hand_join_suns_of_any_two_maps():
+    from archimap.client_maps import Area, Exit
+    from archimap.client_zones import added_passages
+    areas = {(5, -20): [Area((0.2, 0.2), [Exit("left", 0.3, uv=(0.04, 0.28))]),
+                        Area((0.6, 0.6), [Exit("right", 0.6, uv=(0.96, 0.59))])],
+             (6, -19): [Area((0.4, 0.7), [Exit("left", 0.6, uv=(0.04, 0.59)), Exit("bottom", 0.2, uv=(0.18, 0.97))])]}
+    [p] = added_passages({"add_passages": [{"a": [6, -19, "left"], "b": [5, -20, "right"]}]}, areas)
+    assert (p.a, p.b, p.ua, p.ub) == (((5, -20), 1), ((6, -19), 0), (0.96, 0.59), (0.04, 0.59))
+    [p] = added_passages({"add_passages": [{"a": [5, -20, "left"], "b": [9, 9]}]}, areas)
+    assert (p.a, p.b, p.ua, p.ub) == (((5, -20), 0), ((9, 9), 0), (0.04, 0.28), None)

@@ -26,11 +26,18 @@ export function Header({ zones, current, onSelectZone, checkedCount, total, onNe
           value={current ?? ""}
           onChange={(e) => onSelectZone(e.target.value)}
         >
-          {zones.map((z) => (
+          {zones.flatMap((z) => [
             <option key={z.zone} value={z.zone}>
               {z.name}
-            </option>
-          ))}
+            </option>,
+            // A zone made of several sub-areas: each one alone, below it.
+            ...(z.parts ?? []).map((p) => (
+              <option key={`${z.zone}/${p.part}`} value={`${z.zone}/${p.part}`}>
+                {"\u00a0\u00a0↳ "}
+                {p.name}
+              </option>
+            )),
+          ])}
         </select>
       ) : zones.length === 1 ? (
         <span className="zone-name">{zones[0].name}</span>

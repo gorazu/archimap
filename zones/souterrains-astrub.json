@@ -1,0 +1,54 @@
+{
+  "name": "Souterrains d'Astrub",
+  "parts": [
+    {
+      "client_subarea": 99,
+      "part": "souterrain-astrub",
+      "name": "Souterrain d'Astrub"
+    },
+    {
+      "client_subarea": 100,
+      "part": "souterrain-profond-astrub",
+      "name": "Souterrain profond d'Astrub"
+    },
+    {
+      "client_subarea": 181,
+      "part": "souterrain-chateau-amakna",
+      "name": "Souterrain du Château d'Amakna"
+    }
+  ],
+  "add_links": [],
+  "remove_links": [],
+  "add_passages": [
+    {
+      "a": [
+        6,
+        -19,
+        "left"
+      ],
+      "b": [
+        5,
+        -20,
+        "right"
+      ]
+    },
+    {
+      "a": [
+        6,
+        -6,
+        "bottom"
+      ],
+      "b": [
+        6,
+        -5
+      ]
+    }
+  ],
+  "entrances": [
+    {
+      "x": 6,
+      "y": -19,
+      "label": "Cité d'Astrub"
+    }
+  ]
+}

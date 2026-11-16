@@ -1,13 +1,19 @@
 """CLI: build zones from the Dofus Retro client's own map data.
 
     python -m archimap.client_zones list [SEARCH]   # sub-areas, with map counts
-    python -m archimap.client_zones import          # every zones/<zone>.json with "client_subarea"
+    python -m archimap.client_zones import          # every zones/<zone>.json with "client_subarea" or "parts"
 
 The game client caches its data (maps with their [x,y] and sub-area) as
 Flash shared objects; the newest copy is found automatically on macOS and
 Windows, or given with --client-data. A zone is defined in zones/<zone>.json:
 
     {"client_subarea": 75, "name": "Égouts de Brâkmar", "add_links": [], "remove_links": []}
+
+Sub-areas that lead into each other can make one zone, checked as one, with
+"parts" instead of "client_subarea"; each part can still be shown alone:
+
+    {"name": "Souterrains d'Astrub", "parts": [
+        {"client_subarea": 99, "part": "souterrain-astrub", "name": "Souterrain d'Astrub"}, ...]}
 
 Passages come from the "suns" in the client's map files (see
 client_maps.py); maps without a readable map file are joined to all their
@@ -25,7 +31,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .client_maps import find_entrances, find_maps_dir, read_layouts, sun_passages
+from .client_maps import Passage, find_entrances, find_maps_dir, read_layouts, sun_on_side, sun_passages
 from .corrections import apply_link_corrections
 from .export import update_zone_index
 from .sol import read_sol
@@ -89,7 +95,14 @@ def neighbour_links(cells: set[Coords]) -> list[tuple[Coords, Coords]]:
     return sorted(((x, y), n) for x, y in cells for n in ((x + 1, y), (x, y + 1)) if n in cells)
 
 
-def zone_entrances(found, config: dict, client: ClientData, subarea: int) -> list[dict]:
+def zone_parts(config: dict) -> list[dict]:
+    """The zone's sub-areas: its "parts", or its one "client_subarea"."""
+    if "parts" in config:
+        return config["parts"]
+    return [{"client_subarea": config["client_subarea"]}]
+
+
+def zone_entrances(found, config: dict, client: ClientData, subareas: list[int]) -> list[dict]:
     """Entrances for zone.json: detected ones (minus "remove_entrances"), each
     with the names of the sub-areas it leads to, plus "entrances" listed by
     hand in the zone's config (an NPC, for example)."""
@@ -103,7 +116,8 @@ def zone_entrances(found, config: dict, client: ClientData, subarea: int) -> lis
         if e.coords in removed:
             continue
         # Names starting with "//" are the game's internal ones ("//Bonta"): keep them, cleaned.
-        towards = sorted({n.lstrip("/") for n in names.get(e.towards, set()) - {client.subareas[subarea][0]}})
+        own = {client.subareas[s][0] for s in subareas}
+        towards = sorted({n.lstrip("/") for n in names.get(e.towards, set()) - own})
         entry = {"x": e.coords[0], "y": e.coords[1], "area": e.area, "kind": e.kind,
                  **({"uv": list(e.uv)} if e.uv else {}), "to": ", ".join(towards)}
         # Two ladders of one room to the same place are one entrance.
@@ -115,6 +129,22 @@ def zone_entrances(found, config: dict, client: ClientData, subarea: int) -> lis
     return out
 
 
+def added_passages(config: dict, areas) -> list:
+    """Passages listed by hand in the zone's config, from a sun to a sun, for
+    the ones the map files can't tell: a sun leading to a map that isn't its
+    neighbour on that side, for example. Each end is [x, y, side], or [x, y]
+    for a map entered with no sun to go back by."""
+    out = []
+    for entry in config.get("add_passages", []):
+        ends = []
+        for x, y, *side in (entry["a"], entry["b"]):
+            area, uv = sun_on_side(areas, (x, y), side[0]) if side else (0, None)
+            ends.append(((x, y), area, uv))
+        (a, ia, ua), (b, ib, ub) = sorted(ends, key=lambda end: end[0])
+        out.append(Passage((a, ia), (b, ib), ua[1] if ua else 0.5, ua, ub))
+    return out
+
+
 def build_zone(slug: str, config: dict, client: ClientData, existing: dict | None,
                config_path: Path, maps_dir: Path | None = None) -> tuple[dict, list[str]]:
     """zone.json content for a configured zone, merged with a recorded one if any.
@@ -123,17 +153,22 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
     walked in the recording; maps without a readable map file are joined to
     all their neighbours.
     """
-    subarea = int(config["client_subarea"])
+    parts = zone_parts(config)
+    subareas = [int(part["client_subarea"]) for part in parts]
     by_coords: dict[Coords, list[int]] = {}
-    for map_id, coords in client.maps.get(subarea, []):
-        by_coords.setdefault(coords, []).append(map_id)
+    subarea_of: dict[Coords, str] = {}
+    for subarea in subareas:
+        if not client.maps.get(subarea):
+            raise ValueError(f"sub-area {subarea} has no maps in {client.source.name}")
+        for map_id, coords in client.maps[subarea]:
+            by_coords.setdefault(coords, []).append(map_id)
+            subarea_of[coords] = client.subareas[subarea][0]
     cells = set(by_coords)
-    if not cells:
-        raise ValueError(f"sub-area {subarea} has no maps in {client.source.name}")
-    name = config.get("name") or client.subareas[subarea][0]
+    name = config.get("name") or client.subareas[subareas[0]][0]
     notes = []
     areas, passages, unreadable = sun_passages(by_coords, maps_dir) if maps_dir else ({}, [], cells)
     layouts = read_layouts(by_coords, maps_dir) if maps_dir else {}
+    passages += added_passages(config, areas)
     suns = {(p.a[0], p.b[0]) for p in passages}
     if existing:
         maps = list(existing["maps"])
@@ -161,6 +196,9 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
         m.pop("areas", None)
         m.pop("layout", None)
         m.pop("paths", None)
+        m.pop("subarea", None)
+        if len(parts) > 1 and (m["x"], m["y"]) in subarea_of:
+            m["subarea"] = subarea_of[(m["x"], m["y"])]
         if areas.get((m["x"], m["y"])):
             m["areas"] = [list(a.center) for a in areas[(m["x"], m["y"])]]
             # Walking routes between the map's suns, over its floor.
@@ -168,7 +206,7 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
         # The map's own layout (floor, walls, suns), drawn inside its plan tile.
         if (m["x"], m["y"]) in layouts:
             m["layout"] = layouts[(m["x"], m["y"])]
-    zone["entrances"] = zone_entrances(find_entrances(areas, passages), config, client, subarea)
+    zone["entrances"] = zone_entrances(find_entrances(areas, passages), config, client, subareas)
     zone["passages"] = [{"a": [*p.a[0], p.a[1]], "b": [*p.b[0], p.b[1]], "t": p.t,
                          **({"ua": list(p.ua)} if p.ua else {}), **({"ub": list(p.ub)} if p.ub else {})}
                         for p in passages]
@@ -184,7 +222,16 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
     final, link_notes = apply_link_corrections(links, config_path, all_cells)
     zone["maps"] = sorted(zone["maps"], key=lambda m: (m["y"], m["x"]))
     zone["links"] = [[a[0], a[1], b[0], b[1]] for a, b in final]
-    zone["client_subarea"] = subarea
+    zone.pop("parts", None)
+    if len(parts) > 1:
+        zone.pop("client_subarea", None)
+        # In-game sub-area name and map count of each part, for showing one part alone.
+        zone["parts"] = [{"part": part["part"], "name": part.get("name") or client.subareas[s][0],
+                          "subarea": client.subareas[s][0],
+                          "maps": sum(m.get("subarea") == client.subareas[s][0] for m in zone["maps"])}
+                         for part, s in zip(parts, subareas)]
+    else:
+        zone["client_subarea"] = subareas[0]
     return zone, notes + link_notes
 
 
@@ -226,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
     imported = 0
     for config_path in configs:
         config = json.loads(config_path.read_text())
-        if "client_subarea" not in config:
+        if "client_subarea" not in config and "parts" not in config:
             continue
         slug = config_path.stem
         zone_json = data_dir / slug / "zone.json"
@@ -235,11 +282,12 @@ def main(argv: list[str] | None = None) -> int:
         zone_json.parent.mkdir(parents=True, exist_ok=True)
         zone_json.write_text(json.dumps(zone, indent=2, ensure_ascii=False) + "\n")
         update_zone_index(data_dir, slug, zone["name"], len(zone["maps"]),
-                          subarea=client.subareas[zone["client_subarea"]][0])
+                          subarea=client.subareas[zone["client_subarea"]][0] if "client_subarea" in zone else None,
+                          parts=zone.get("parts"))
         print(f"  {slug}: {zone['name']}: " + "; ".join(notes))
         imported += 1
     if not imported:
-        print('No zones/<zone>.json with "client_subarea" found.', file=sys.stderr)
+        print('No zones/<zone>.json with "client_subarea" or "parts" found.', file=sys.stderr)
     return 0
 
 
