@@ -7817,15 +7817,11 @@
   "client_subarea": 314,
   "entrances": [
     {
-      "x": -6,
-      "y": 26,
+      "x": -4,
+      "y": 24,
       "area": 0,
-      "kind": "sun",
-      "uv": [
-        0.107,
-        0.969
-      ],
-      "to": "La presqu'île des Dragoeufs"
+      "kind": "manual",
+      "to": "PNJ à la surface"
     }
   ]
 }

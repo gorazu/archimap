@@ -2,5 +2,18 @@
   "client_subarea": 314,
   "name": "Sanctuaire des Dragoeufs",
   "add_links": [],
-  "remove_links": []
+  "remove_links": [],
+  "entrances": [
+    {
+      "x": -4,
+      "y": 24,
+      "label": "PNJ à la surface"
+    }
+  ],
+  "remove_entrances": [
+    [
+      -6,
+      26
+    ]
+  ]
 }
