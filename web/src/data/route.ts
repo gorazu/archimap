@@ -50,7 +50,8 @@ export function buildGraph(zone: Zone): ZoneGraph {
   }
   const edges = new Map<number, Map<number, RouteStep>>(nodes.map((_, i) => [i, new Map()]));
   const connect = (a: number | undefined, b: number | undefined, leave?: [number, number], enter?: [number, number]) => {
-    if (a === undefined || b === undefined || a === b) return;
+    // Two suns can lead to the same part: keep the first one listed.
+    if (a === undefined || b === undefined || a === b || edges.get(a)!.has(b)) return;
     edges.get(a)!.set(b, { from: a, to: b, leave, enter });
     edges.get(b)!.set(a, { from: b, to: a, leave: enter, enter: leave });
   };

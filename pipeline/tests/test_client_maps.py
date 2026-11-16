@@ -159,6 +159,38 @@ def test_a_sun_only_on_the_edge_is_preferred_to_a_corner_one():
     corner = (0.86, 0.06)  # top-right corner: counts on the top and the right
     areas = {(6, -14): [Area((0.5, 0.4), [Exit("top", 0.86, uv=corner), Exit("right", 0.06, uv=corner),
                                            Exit("right", 0.59, uv=(0.96, 0.59))])],
-             (7, -14): [Area((0.3, 0.8), [Exit("left", 0.66, uv=(0.04, 0.66))])]}
-    [p] = passages_between(areas)
+             (7, -14): [Area((0.3, 0.8), [Exit("left", 0.66, uv=(0.04, 0.66))])],
+             (6, -15): [Area((0.5, 0.5), [Exit("bottom", 0.89, uv=(0.89, 0.97))])]}  # where the corner sun leads
+    [p] = [p for p in passages_between(areas) if p.b[0] == (7, -14)]
     assert (p.ua, p.ub) == ((0.96, 0.59), (0.04, 0.66))
+
+
+def test_paths_to_the_parts_of_a_split_map_use_different_suns():
+    areas = {(0, 0): [Area((0.5, 0.5), [Exit("right", 0.34, uv=(0.96, 0.34)), Exit("right", 0.53, uv=(0.96, 0.53))])],
+             (1, 0): [Area((0.2, 0.3), [Exit("left", 0.3, uv=(0.04, 0.3))]),
+                      Area((0.2, 0.7), [Exit("left", 0.6, uv=(0.04, 0.6))])]}
+    passages = passages_between(areas)
+    assert sorted((p.b[1], p.ua) for p in passages) == [(0, (0.96, 0.34)), (1, (0.96, 0.53))]
+
+
+def test_corner_suns_are_paired_last():
+    # Sanctuaire des Dragoeufs [-7,30] -> [-6,30], checked in game: the
+    # middle sun leads to the middle one, the top-right part's corner sun to
+    # the top one.
+    areas = {(-7, 30): [Area((0.53, 0.53), [Exit("right", 0.594, uv=(0.964, 0.594)), Exit("right", 0.906, uv=(0.964, 0.906)),
+                                             Exit("bottom", 0.964, uv=(0.964, 0.906))]),
+                        Area((0.81, 0.09), [Exit("right", 0.094, uv=(0.964, 0.094)), Exit("top", 0.964, uv=(0.964, 0.094))])],
+             (-6, 30): [Area((0.53, 0.47), [Exit("left", 0.156, uv=(0.036, 0.156)), Exit("left", 0.531, uv=(0.036, 0.531)),
+                                             Exit("left", 0.844, uv=(0.036, 0.844))])]}
+    passages = sorted((p.a[1], p.ua, p.ub) for p in passages_between(areas))
+    # ...and the bottom-right corner sun to the bottom one: two suns to the same map.
+    assert passages == [(0, (0.964, 0.594), (0.036, 0.531)), (0, (0.964, 0.906), (0.036, 0.844)),
+                        (1, (0.964, 0.094), (0.036, 0.156))]
+
+
+def test_every_sun_towards_a_linked_map_gets_a_passage():
+    # Two suns of the same part lead to the same neighbour, which has two suns back.
+    areas = {(0, 0): [Area((0.5, 0.5), [Exit("right", 0.3, uv=(0.96, 0.3)), Exit("right", 0.7, uv=(0.96, 0.7))])],
+             (1, 0): [Area((0.5, 0.5), [Exit("left", 0.25, uv=(0.04, 0.25)), Exit("left", 0.75, uv=(0.04, 0.75))])]}
+    passages = sorted((p.ua, p.ub) for p in passages_between(areas))
+    assert passages == [((0.96, 0.3), (0.04, 0.25)), ((0.96, 0.7), (0.04, 0.75))]

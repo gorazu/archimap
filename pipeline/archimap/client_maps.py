@@ -329,7 +329,7 @@ def passages_between(areas: dict[Coords, list[Area]]) -> list[Passage]:
     """
     corners = {c: {uv for uv, n in collections.Counter(e.uv for part in parts for e in part.exits if not e.inner).items() if n > 1}
                for c, parts in areas.items()}
-    passages = []
+    passages, further = [], []
     for (x, y) in sorted(areas):
         for side in ("right", "bottom"):  # each neighbour pair once
             dx, dy = SIDES[side]
@@ -346,15 +346,57 @@ def passages_between(areas: dict[Coords, list[Area]]) -> list[Passage]:
                          or (any(not e.inner for _, e in there) and here) or any(e.inner for _, e in there))
             if not connected:
                 continue
-            for (i, j), (t, ua, ub) in _pair_areas(here, there).items():
+            extra: list = []
+            for (i, j), (t, ua, ub) in _pair_areas(here, there, corners[(x, y)] | corners[other], extra).items():
                 passages.append(Passage(((x, y), i), (other, j), t, ua, ub))
-    return passages
+            further += [Passage(((x, y), i), (other, j), t, ua, ub) for (i, j), (t, ua, ub) in extra]
+    # A second sun between the same two areas, unless one of its suns
+    # already leads elsewhere (a corner sun counts on two edges).
+    used = {(p.a[0], p.ua) for p in passages} | {(p.b[0], p.ub) for p in passages}
+    passages += [p for p in further if (p.a[0], p.ua) not in used and (p.b[0], p.ub) not in used]
+    return passages + _unpaired_suns(areas, passages)
 
 
-def _pair_areas(here: list[tuple[int, Exit]], there: list[tuple[int, Exit]]
-                ) -> dict[tuple[int, int], tuple[float, tuple | None, tuple | None]]:
+OPPOSITE = {"left": "right", "right": "left", "top": "bottom", "bottom": "top"}
+
+
+def _unpaired_suns(areas: dict[Coords, list[Area]], passages: list[Passage]) -> list[Passage]:
+    """Passages for suns no passage uses, towards a map already linked on
+    that side: several suns of a map can lead to the same neighbour. Each
+    leaves from its own part of the map and arrives at the closest sun on
+    the facing edge there, an unused one if any."""
+    linked = {frozenset((p.a[0], p.b[0])) for p in passages}
+    used = {(p.a[0], p.ua) for p in passages} | {(p.b[0], p.ub) for p in passages}
+    options = []
+    for xy, parts in sorted(areas.items()):
+        for i, area in enumerate(parts):
+            for e in area.exits:
+                dx, dy = SIDES[e.side]
+                other = (xy[0] + dx, xy[1] + dy)
+                if e.inner or (xy, e.uv) in used or frozenset((xy, other)) not in linked:
+                    continue
+                for j, part in enumerate(areas[other]):
+                    for f in part.exits:
+                        if f.side == OPPOSITE[e.side] and not f.inner:
+                            options.append(((other, f.uv) in used, abs(e.t - f.t), xy, i, e, other, j, f))
+    added = []
+    for _, _, xy, i, e, other, j, f in sorted(options, key=lambda o: o[:2]):
+        if (xy, e.uv) in used:
+            continue  # paired already (a corner sun counts on two sides)
+        used |= {(xy, e.uv), (other, f.uv)}
+        t = round((e.t + f.t) / 2, 3)
+        # Passages go from the left or top map, like the others.
+        added.append(Passage((xy, i), (other, j), t, e.uv, f.uv) if e.side in ("right", "bottom")
+                     else Passage((other, j), (xy, i), t, f.uv, e.uv))
+    return added
+
+
+def _pair_areas(here: list[tuple[int, Exit]], there: list[tuple[int, Exit]], corners: set = frozenset(),
+                extra: list | None = None) -> dict[tuple[int, int], tuple[float, tuple | None, tuple | None]]:
     """Which area here connects to which area there: where they cross the
-    edge, and the suns used on each side."""
+    edge, and the suns used on each side (`corners`: suns counting on two
+    edges, paired last). Further sun pairs between the same two areas go
+    to `extra`: two suns can lead to the same map."""
     # A room's inner exit may face no exit on the other map: use the first
     # area there, entered at an unknown place.
     if not here or not there:
@@ -365,21 +407,38 @@ def _pair_areas(here: list[tuple[int, Exit]], there: list[tuple[int, Exit]]
             pairs.setdefault(key, (e.t, e.uv if here else None, None if here else e.uv))
         return pairs
     pairs: dict[tuple[int, int], tuple[float, tuple | None, tuple | None]] = {}
-    if len({i for i, _ in here}) == 1 or len({j for j, _ in there}) == 1:
+    split_here, split_there = len({i for i, _ in here}) > 1, len({j for j, _ in there}) > 1
+    ladders = any(e.inner for _, e in here + there)
+    if (not split_here and not split_there) or min(len(here), len(there)) == 1 or ladders:
+        # One path, one sun on a side that every path shares, or a ladder
+        # (not on the edge, so not paired by position): the first exits
+        # (suns only on this edge come first).
         for i, a in here:
             for j, b in there:
                 pairs.setdefault((i, j), (round((a.t + b.t) / 2, 3), a.uv, b.uv))
         return pairs
-    # Both maps split: pair exits by position along the edge, closest first.
+    # Pair exits by position along the edge, closest first, each exit once,
+    # so that the paths to the parts of a split map use different suns.
+    # Suns only on this edge first: a corner sun may lead the other way.
     used_here, used_there = set(), set()
-    for distance, (k, (i, a)), (m, (j, b)) in sorted(
-            ((abs(a.t - b.t), (k, (i, a)), (m, (j, b)))
-             for k, (i, a) in enumerate(here) for m, (j, b) in enumerate(there)), key=lambda o: o[0]):
+    for _, distance, (k, (i, a)), (m, (j, b)) in sorted(
+            ((a.uv in corners or b.uv in corners, abs(a.t - b.t), (k, (i, a)), (m, (j, b)))
+             for k, (i, a) in enumerate(here) for m, (j, b) in enumerate(there)), key=lambda o: o[:2]):
         if k in used_here or m in used_there:
             continue
         used_here.add(k)
         used_there.add(m)
-        pairs.setdefault((i, j), (round((a.t + b.t) / 2, 3), a.uv, b.uv))
+        if (i, j) in pairs:
+            if extra is not None:
+                extra.append(((i, j), (round((a.t + b.t) / 2, 3), a.uv, b.uv)))
+            continue
+        pairs[(i, j)] = (round((a.t + b.t) / 2, 3), a.uv, b.uv)
+    if not (split_here and split_there):
+        # One side isn't split: every part of the other side with an exit
+        # reaches it, even with fewer suns than parts.
+        for i, a in here:
+            for j, b in there:
+                pairs.setdefault((i, j), (round((a.t + b.t) / 2, 3), a.uv, b.uv))
     return pairs
 
 
