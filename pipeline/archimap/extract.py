@@ -12,6 +12,7 @@ from pathlib import Path
 
 import cv2
 
+from .client_maps import find_maps_dir
 from .client_zones import build_zone, find_client_data, load_client_data
 from .corrections import apply_link_corrections, corrections_path
 from .dedupe import dedupe
@@ -192,13 +193,14 @@ def main(argv: list[str] | None = None) -> int:
 
     data_dir = args.data_dir or root / "web" / "public" / "data"
     name = args.name or args.zone
-    links, notes = apply_link_corrections(route_links(visits), corrections_path(root, args.zone),
+    walked = route_links(visits)
+    links, notes = apply_link_corrections(walked, corrections_path(root, args.zone),
                                           {m.coords for m in maps})
     for note in notes:
         print(f"  {note}")
     zone_json = export_zone(maps, args.zone, name, args.video.name, data_dir,
-                            links=links)
-    count = len(maps)
+                            links=links, route_links=walked)
+    count, subarea = len(maps), None
     config_path = corrections_path(root, args.zone)
     config = json.loads(config_path.read_text()) if config_path.is_file() else {}
     if "client_subarea" in config:
@@ -207,12 +209,14 @@ def main(argv: list[str] | None = None) -> int:
         if client is None:
             print("  warning: game client data not found, maps missing from the recording are not added")
         else:
-            zone, notes = build_zone(args.zone, config, load_client_data(client),
-                                     json.loads(zone_json.read_text()), config_path)
+            client_data = load_client_data(client)
+            zone, notes = build_zone(args.zone, config, client_data,
+                                     json.loads(zone_json.read_text()), config_path, find_maps_dir())
+            subarea = client_data.subareas[zone["client_subarea"]][0]
             zone_json.write_text(json.dumps(zone, indent=2, ensure_ascii=False) + "\n")
             name, count = zone["name"], len(zone["maps"])
             print(f"  client data: {'; '.join(notes)}")
-    update_zone_index(data_dir, args.zone, name, count)
+    update_zone_index(data_dir, args.zone, name, count, subarea=subarea)
     report = write_report(visits, maps, args.zone, args.video.name, out_root / args.zone,
                           variants[0])
 

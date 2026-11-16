@@ -78,7 +78,7 @@ uv run python -m archimap.client_zones list Egout   # find sub-area ids
 uv run python -m archimap.client_zones import       # (re)build every zone with a "client_subarea"
 ```
 
-The client data has no passages, so every pair of neighbouring maps is joined: list walls in `remove_links`. For a zone that also has a recording, the recorded maps and walked passages are kept and only the maps the recording missed are added. Sub-areas where many maps share the same coordinates (Souterrain d'Amakna, Grotte Hesque…) can't be used: Archimap tells maps apart by their coordinates.
+Passages come from the **suns** in the client's map files (`data/maps/*.swf` of the installed game, found automatically; `--client-maps` to point elsewhere): a sun on a map's edge is a passage to the neighbouring map on that side. Only the unencrypted map files the client ships are read; maps without one (Caverne des Fungus, for example) are joined to all their neighbours, so list walls in `remove_links`. On Égouts de Bonta, the suns find every passage walked in the recording. For a zone that also has a recording, the recorded maps and walked passages are kept and only the maps the recording missed are added. Sub-areas where many maps share the same coordinates (Souterrain d'Amakna, Grotte Hesque…) can't be used: Archimap tells maps apart by their coordinates.
 
 ### Fixing passages on the plan
 
@@ -101,6 +101,7 @@ The site is deployed on Vercel from GitHub: the Vercel project imports `gorazu/a
 
 In desktop Chrome or Edge, open a zone and click **Direct**, then **Démarrer la capture** and share the Dofus Retro window (any window size). Before starting, enable the **modern UI** option and place the **chat on the right side** of the window: the game area is found from the chat panel and UI bar borders. Archimap finds the game area and the coordinates by itself, reads them about twice per second, and checks each map you walk onto. The current map is outlined in blue and kept in view.
 
+- Live mode also reads the game's location line ("Bonta (**Egout de Bonta**) - Bontarien"). The sub-area in parentheses tells which zone you're in, so walking from one zone into another (Souterrain d'Astrub → Souterrain profond d'Astrub, for example) switches the map automatically (**Changer de zone automatiquement**, on by default). It also keeps maps from being checked while you walk on the surface above an underground zone, which has the same coordinates. When the line can't be read, the coordinates decide.
 - A position is confirmed after a few identical readings in a row (the **Stabilité** setting). A jump to a map that isn't next to the current one (teleport) needs twice as many.
 - The panel shows what OCR reads and the crop it reads from, which helps when something looks off. **Recalibrer** finds the layout again, for example after changing the interface.
 - Frames stay in the browser. Tesseract.js downloads its OCR engine and English data from a CDN the first time.

@@ -362,6 +362,15 @@ body,
   color: var(--muted);
 }
 
+.live-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--text);
+  cursor: pointer;
+}
+
 .live-link {
   margin-top: 8px;
   padding: 0;

@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "./components/Header";
 import { LivePanel } from "./components/LivePanel";
 import { ZoneMap } from "./components/ZoneMap";
 import { fetchZone, fetchZoneIndex, mapKey, type Zone, type ZoneSummary } from "./data/zones";
-import type { Coords } from "./live/ocr";
+import { resolveZone, type ZoneLookup } from "./live/location";
 import { isLiveCaptureSupported } from "./live/session";
 import { useLiveCapture } from "./live/useLiveCapture";
-import { useProgress } from "./progress/useProgress";
+import { ProgressStoreContext, useProgress } from "./progress/useProgress";
 
 const LIVE_SUPPORTED = isLiveCaptureSupported();
 
@@ -37,17 +37,21 @@ function initialZone(zones: ZoneSummary[]): string | null {
 export function App() {
   const [zones, setZones] = useState<ZoneSummary[] | null>(null);
   const [slug, setSlug] = useState<string | null>(null);
-  const [zone, setZone] = useState<Zone | null>(null);
+  // Every zone is loaded up front: live capture needs them all to tell where the player is.
+  const [zoneData, setZoneData] = useState<Map<string, Zone> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchZoneIndex()
-      .then((list) => {
+      .then(async (list) => {
+        const loaded = await Promise.all(list.map((z) => fetchZone(z.zone)));
+        setZoneData(new Map(loaded.map((z) => [z.zone, z])));
         setZones(list);
         setSlug(initialZone(list));
       })
       .catch((e: Error) => setError(e.message));
   }, []);
+  const zone = (slug && zoneData?.get(slug)) || null;
 
   // Follow #zone links to another zone without a reload.
   useEffect(() => {
@@ -61,33 +65,44 @@ export function App() {
 
   useEffect(() => {
     if (!slug) return;
-    let cancelled = false;
-    setZone(null);
-    setError(null);
     history.replaceState(null, "", `#${encodeURIComponent(slug)}`);
     rememberZone(slug);
-    fetchZone(slug)
-      .then((z) => !cancelled && setZone(z))
-      .catch((e: Error) => !cancelled && setError(e.message));
-    return () => {
-      cancelled = true;
-    };
   }, [slug]);
 
-  const { checked, toggle, check, reset } = useProgress(slug ?? "");
+  const { checked, toggle, reset } = useProgress(slug ?? "");
+  const store = useContext(ProgressStoreContext);
 
-  const zoneMaps = useMemo(() => new Set(zone?.maps.map((m) => mapKey(m.x, m.y))), [zone]);
-  const onPosition = useCallback(
-    ([x, y]: Coords) => {
-      const key = mapKey(x, y);
-      if (zoneMaps.has(key)) check(key);
-    },
-    [zoneMaps, check],
+  const lookups: ZoneLookup[] = useMemo(
+    () =>
+      (zones ?? []).map((z) => ({
+        zone: z.zone,
+        subarea: z.subarea,
+        maps: new Set(zoneData?.get(z.zone)?.maps.map((m) => mapKey(m.x, m.y))),
+      })),
+    [zones, zoneData],
   );
-  const live = useLiveCapture(zoneMaps, onPosition);
+  const knownMaps = useMemo(() => new Set(lookups.flatMap((z) => [...z.maps])), [lookups]);
+  const live = useLiveCapture(knownMaps);
   const [liveOpen, setLiveOpen] = useState(false);
-  const position = live.state.position;
-  const current = position ? mapKey(position[0], position[1]) : null;
+  const { position, location: gameLocation } = live.state;
+  const positionKey = position ? mapKey(position[0], position[1]) : null;
+  const positionZone = positionKey ? resolveZone(positionKey, gameLocation, slug, lookups) : null;
+  const current = positionZone === slug ? positionKey : null;
+
+  // Check the map the player is on, in its own zone, and follow them into
+  // another zone. Only once per position: picking a zone by hand during a
+  // capture isn't undone until the player moves.
+  const handled = useRef("");
+  useEffect(() => {
+    if (!positionKey || !positionZone) return;
+    const step = `${positionZone}|${positionKey}`;
+    if (step === handled.current) return;
+    handled.current = step;
+    if (lookups.find((z) => z.zone === positionZone)?.maps.has(positionKey)) {
+      store.set(positionZone, positionKey, true);
+    }
+    if (positionZone !== slug && live.options.autoZone) setSlug(positionZone);
+  }, [positionKey, positionZone, lookups, store, slug, live.options.autoZone]);
 
   // Ignore stored keys for maps that are no longer in the zone.
   const checkedCount = useMemo(
@@ -134,7 +149,13 @@ export function App() {
         ) : zone ? (
           <ZoneMap zone={zone} checked={checked} onToggle={toggle} current={current} />
         ) : null}
-        {liveOpen && zone && <LivePanel live={live} zoneMaps={zoneMaps} onClose={() => setLiveOpen(false)} />}
+        {liveOpen && zone && (
+          <LivePanel
+            live={live}
+            positionZone={positionZone ? (zones?.find((z) => z.zone === positionZone)?.name ?? null) : null}
+            onClose={() => setLiveOpen(false)}
+          />
+        )}
       </main>
     </div>
   );

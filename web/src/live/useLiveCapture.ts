@@ -1,32 +1,35 @@
 import { useEffect, useRef, useState } from "react";
-import type { Coords } from "./ocr";
 import { IDLE_STATE, LiveSession, type LiveState } from "./session";
 import { DEFAULT_TRACKER_OPTIONS, type TrackerOptions } from "./tracker";
 
 const OPTIONS_KEY = "archimap:live-options";
 
-function loadOptions(): TrackerOptions {
+export interface LiveOptions extends TrackerOptions {
+  /** Switch to the zone the player walks into. */
+  autoZone: boolean;
+}
+
+const DEFAULT_OPTIONS: LiveOptions = { ...DEFAULT_TRACKER_OPTIONS, autoZone: true };
+
+function loadOptions(): LiveOptions {
   try {
     const saved = JSON.parse(localStorage.getItem(OPTIONS_KEY) ?? "null");
-    if (saved && typeof saved.stableReads === "number") return { ...DEFAULT_TRACKER_OPTIONS, ...saved };
+    if (saved && typeof saved.stableReads === "number") return { ...DEFAULT_OPTIONS, ...saved };
   } catch {
     // Blocked or corrupt storage: use the defaults.
   }
-  return DEFAULT_TRACKER_OPTIONS;
+  return DEFAULT_OPTIONS;
 }
 
-export function useLiveCapture(zoneMaps: ReadonlySet<string>, onPosition: (coords: Coords) => void) {
+/** @param knownMaps Map keys of every zone, to settle readings that disagree. */
+export function useLiveCapture(knownMaps: ReadonlySet<string>) {
   const [state, setState] = useState<LiveState>(IDLE_STATE);
-  const [options, setOptions] = useState<TrackerOptions>(loadOptions);
-  const onPositionRef = useRef(onPosition);
+  const [options, setOptions] = useState<LiveOptions>(loadOptions);
   const sessionRef = useRef<LiveSession | null>(null);
-  sessionRef.current ??= new LiveSession(setState, (coords) => onPositionRef.current(coords));
+  sessionRef.current ??= new LiveSession(setState);
   const session = sessionRef.current;
 
-  useEffect(() => {
-    onPositionRef.current = onPosition;
-  }, [onPosition]);
-  useEffect(() => session.setZoneMaps(zoneMaps), [session, zoneMaps]);
+  useEffect(() => session.setZoneMaps(knownMaps), [session, knownMaps]);
   useEffect(() => {
     session.setOptions(options);
     try {

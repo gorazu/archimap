@@ -4,6 +4,8 @@ export interface ZoneSummary {
   zone: string;
   name: string;
   maps: number;
+  /** In-game sub-area name, as in the game's location line ("Bonta (Egout de Bonta)"). */
+  subarea?: string;
 }
 
 /** "client": from the game client's map data rather than a recording. */

@@ -53,3 +53,10 @@ def test_update_zone_index(tmp_path):
         {"zone": "a", "name": "zone A", "maps": 5},
         {"zone": "b", "name": "Zone B", "maps": 4},
     ]}
+
+
+def test_zone_index_keeps_subarea_when_not_given(tmp_path):
+    update_zone_index(tmp_path, "e", "Égouts", 3, subarea="Egout de Bonta")
+    update_zone_index(tmp_path, "e", "Égouts", 4)
+    assert json.loads((tmp_path / "zones.json").read_text())["zones"] == [
+        {"zone": "e", "name": "Égouts", "maps": 4, "subarea": "Egout de Bonta"}]

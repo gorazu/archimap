@@ -16,6 +16,7 @@ import {
   type FrameEdges,
   type OcrWord,
 } from "./layout";
+import { parseLocation } from "./location";
 import { binarize, parseCoords, readingValue, TEXT_VARIANTS, type Coords } from "./ocr";
 import { PositionTracker, type TrackerOptions } from "./tracker";
 
@@ -37,6 +38,8 @@ export interface LiveState {
   /** Raw OCR text per binarization, from the last capture. */
   readings: string[];
   position: Coords | null;
+  /** Sub-area from the game's location line, or null when it can't be read. */
+  location: string | null;
   /** What OCR saw last: the coordinates crop and each binarization. */
   preview: { crop: ImageData; binarized: ImageData[] } | null;
 }
@@ -48,12 +51,16 @@ export const IDLE_STATE: LiveState = {
   readings: [],
   position: null,
   preview: null,
+  location: null,
 };
 
 const TICK_MS = 400;
 const LAYOUT_SAMPLES = 12;
 const LAYOUT_SAMPLE_MS = 1000;
-const LABEL_RETRY_MS = 2500;
+/** The top-left corner (location line, and the label until found) is read this often. */
+const TOP_LEFT_MS = 1500;
+/** A location stays valid this long when a read fails, so OCR hiccups don't flicker it. */
+const LOCATION_TTL_MS = 5000;
 
 export function isLiveCaptureSupported(): boolean {
   return typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia;
@@ -94,12 +101,10 @@ export class LiveSession {
   private coords: Box | null = null;
   private coordsFound = false;
   private lastSample = 0;
-  private lastLabelTry = 0;
+  private lastTopLeft = 0;
+  private lastLocationAt = 0;
 
-  constructor(
-    private onState: (state: LiveState) => void,
-    private onPosition: (coords: Coords) => void,
-  ) {}
+  constructor(private onState: (state: LiveState) => void) {}
 
   setOptions(options: TrackerOptions) {
     this.tracker.setOptions(options);
@@ -174,7 +179,7 @@ export class LiveSession {
     this.edges = [];
     this.game = this.coords = null;
     this.coordsFound = false;
-    this.lastSample = this.lastLabelTry = 0;
+    this.lastSample = this.lastTopLeft = 0;
   }
 
   private update(patch: Partial<LiveState>) {
@@ -220,9 +225,9 @@ export class LiveSession {
       this.sampleLayout(ctx.getImageData(0, 0, w, h));
     }
     if (!this.game || !this.coords) return;
-    if (!this.coordsFound && now - this.lastLabelTry > LABEL_RETRY_MS) {
-      this.lastLabelTry = now;
-      await this.findLabel(ctx);
+    if (now - this.lastTopLeft > TOP_LEFT_MS) {
+      this.lastTopLeft = now;
+      await this.readTopLeft(ctx, now);
       if (!this.stream) return;
     }
     await this.readCoords(ctx);
@@ -237,13 +242,14 @@ export class LiveSession {
       // The coordinates box depends on the game area: find the label again.
       this.coords = defaultCoordsBox(game);
       this.coordsFound = false;
-      this.lastLabelTry = 0;
+      this.lastTopLeft = 0;
     }
     this.game = game;
     this.publishLayout();
   }
 
-  private async findLabel(ctx: CanvasRenderingContext2D) {
+  /** OCR the top-left corner: the location line, and the coordinates label until found. */
+  private async readTopLeft(ctx: CanvasRenderingContext2D, now: number) {
     const game = this.game!;
     const region = labelRegion(game);
     const scale = labelScale(game);
@@ -258,9 +264,16 @@ export class LiveSession {
     const worker = this.words;
     if (!worker) return;
     const result = await worker.recognize(toCanvas({ width: big.width, height: big.height, data }), {}, { blocks: true });
-    const words: OcrWord[] = (result.data.blocks ?? []).flatMap((b) =>
-      b.paragraphs.flatMap((p) => p.lines.flatMap((l) => l.words.map((wd) => ({ text: wd.text, bbox: wd.bbox })))),
-    );
+    const lines = (result.data.blocks ?? []).flatMap((b) => b.paragraphs.flatMap((p) => p.lines));
+    const location = parseLocation(lines.map((l) => l.text));
+    if (location) {
+      this.lastLocationAt = now;
+      if (location !== this.state.location) this.update({ location });
+    } else if (this.state.location && now - this.lastLocationAt > LOCATION_TTL_MS) {
+      this.update({ location: null });
+    }
+    if (this.coordsFound) return;
+    const words: OcrWord[] = lines.flatMap((l) => l.words.map((wd) => ({ text: wd.text, bbox: wd.bbox })));
     const found = coordsBoxFromLabel(words, region, scale);
     if (found) {
       this.coords = found;
@@ -281,13 +294,12 @@ export class LiveSession {
       texts.push(data.text.replace(/\s+/g, ""));
     }
     const value = readingValue(texts.map(parseCoords), this.tracker.current, this.zoneMaps);
-    const confirmed = this.tracker.push(value);
+    this.tracker.push(value);
     this.update({
       readings: texts,
       position: this.tracker.current,
       preview: { crop, binarized: binarized.map(toImageData) },
     });
-    if (confirmed) this.onPosition(confirmed);
   }
 
   private publishLayout() {

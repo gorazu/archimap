@@ -9,10 +9,10 @@ Windows, or given with --client-data. A zone is defined in zones/<zone>.json:
 
     {"client_subarea": 75, "name": "Égouts de Brâkmar", "add_links": [], "remove_links": []}
 
-The client data has no passages between maps, so every pair of
-neighbouring maps is joined; fix walls with "remove_links". When a zone
-also has a recording, its maps and walked passages are kept and only the
-maps the recording missed are added (without screenshots).
+Passages come from the "suns" in the client's map files (see
+client_maps.py); maps without a readable map file are joined to all their
+neighbours. When a zone also has a recording, its maps and walked passages
+are kept and only the maps the recording missed are added.
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from .client_maps import find_maps_dir, sun_links
 from .corrections import apply_link_corrections
 from .export import update_zone_index
 from .sol import read_sol
@@ -41,7 +42,7 @@ _SO_ROOTS = [
 
 @dataclass
 class ClientData:
-    maps: dict[int, list[Coords]]  # sub-area id -> map coordinates (may repeat)
+    maps: dict[int, list[tuple[int, Coords]]]  # sub-area id -> (map id, coordinates)
     subareas: dict[int, tuple[str, str]]  # id -> (name, area name)
     source: Path
 
@@ -60,9 +61,9 @@ def load_client_data(path: Path) -> ClientData:
     areas = {int(k): v.get("n", "?") for k, v in data["a"].items()}
     subareas = {int(k): (v.get("n", "?"), areas.get(int(v.get("a", -1)), "?"))
                 for k, v in data["sa"].items()}
-    maps: dict[int, list[Coords]] = {}
-    for m in data["m"].values():
-        maps.setdefault(int(m["sa"]), []).append((int(m["x"]), int(m["y"])))
+    maps: dict[int, list[tuple[int, Coords]]] = {}
+    for map_id, m in data["m"].items():
+        maps.setdefault(int(m["sa"]), []).append((int(map_id), (int(m["x"]), int(m["y"]))))
     return ClientData(maps, subareas, path)
 
 
@@ -71,31 +72,51 @@ def neighbour_links(cells: set[Coords]) -> list[tuple[Coords, Coords]]:
 
 
 def build_zone(slug: str, config: dict, client: ClientData, existing: dict | None,
-               config_path: Path) -> tuple[dict, list[str]]:
-    """zone.json content for a configured zone, merged with a recorded one if any."""
+               config_path: Path, maps_dir: Path | None = None) -> tuple[dict, list[str]]:
+    """zone.json content for a configured zone, merged with a recorded one if any.
+
+    Passages come from the map files' suns (`maps_dir`), plus the passages
+    walked in the recording; maps without a readable map file are joined to
+    all their neighbours.
+    """
     subarea = int(config["client_subarea"])
-    cells = set(client.maps.get(subarea, []))
+    by_coords: dict[Coords, list[int]] = {}
+    for map_id, coords in client.maps.get(subarea, []):
+        by_coords.setdefault(coords, []).append(map_id)
+    cells = set(by_coords)
     if not cells:
         raise ValueError(f"sub-area {subarea} has no maps in {client.source.name}")
     name = config.get("name") or client.subareas[subarea][0]
     notes = []
+    suns, unreadable = sun_links(by_coords, maps_dir) if maps_dir else (set(), cells)
     if existing:
         maps = list(existing["maps"])
-        recorded = {(m["x"], m["y"]) for m in maps}
-        added = sorted(cells - recorded)
+        recorded = {(m["x"], m["y"]) for m in maps if m["source"] != "client"}
+        added = sorted(cells - {(m["x"], m["y"]) for m in maps})
         maps += [{"x": x, "y": y, "source": "client"} for x, y in added]
-        links = {((l[0], l[1]), (l[2], l[3])) for l in existing.get("links", [])}
-        # Maps without a recording: assume they connect to their neighbours.
-        links |= {link for link in neighbour_links(cells | recorded) if set(link) & set(added)}
-        notes.append(f"{len(added)} map(s) added to the {len(recorded)} recorded ones")
+        # Passages walked in a recording; older recorded zones only have "links".
+        # Zones built from the client alone have none: their passages are rebuilt.
+        route = existing.get("route_links", existing.get("links", []) if recorded else [])
+        links = {((l[0], l[1]), (l[2], l[3])) for l in route}
+        from_video = sum(m["source"] != "client" for m in existing["maps"])
+        notes.append(f"{len(added)} map(s) added to the {from_video} recorded ones" if from_video
+                     else f"{len(maps)} maps")
         zone = {**existing, "name": name, "maps": maps}
     else:
         maps = [{"x": x, "y": y, "source": "client"} for x, y in sorted(cells, key=lambda c: (c[1], c[0]))]
-        links = set(neighbour_links(cells))
+        links, recorded = set(), set()
         zone = {"zone": slug, "name": name, "source_video": None,
                 "tile_size": DEFAULT_TILE_SIZE, "maps": maps}
         notes.append(f"{len(maps)} maps")
     all_cells = {(m["x"], m["y"]) for m in zone["maps"]}
+    links |= suns
+    # Without a map file, join to all neighbours, except recorded maps:
+    # their walked passages are better than a guess.
+    guessed = unreadable - recorded
+    links |= {link for link in neighbour_links(all_cells) if set(link) & guessed}
+    notes.append(f"{len(suns)} passages from the map files")
+    if guessed:
+        notes.append(f"{len(guessed)} map(s) without a readable map file joined to all neighbours")
     final, link_notes = apply_link_corrections(links, config_path, all_cells)
     zone["maps"] = sorted(zone["maps"], key=lambda m: (m["y"], m["x"]))
     zone["links"] = [[a[0], a[1], b[0], b[1]] for a, b in final]
@@ -111,6 +132,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("command", choices=["list", "import"])
     p.add_argument("search", nargs="?", default="", help="list: only sub-areas whose name contains this")
     p.add_argument("--client-data", type=Path, help="a cached ANKXTRASO_*_MA.sol file")
+    p.add_argument("--client-maps", type=Path, help="the client's data/maps folder (for passages)")
     p.add_argument("--data-dir", type=Path,
                    help="where zone folders are written (default: <repo>/web/public/data)")
     args = p.parse_args(argv)
@@ -131,6 +153,9 @@ def main(argv: list[str] | None = None) -> int:
 
     root = find_repo_root(Path.cwd())
     data_dir = args.data_dir or root / "web" / "public" / "data"
+    maps_dir = args.client_maps or find_maps_dir()
+    print(f"Map files: {maps_dir}" if maps_dir else
+          "warning: client map files not found, maps are joined to all their neighbours")
     configs = sorted((root / "zones").glob("*.json"))
     imported = 0
     for config_path in configs:
@@ -140,10 +165,11 @@ def main(argv: list[str] | None = None) -> int:
         slug = config_path.stem
         zone_json = data_dir / slug / "zone.json"
         existing = json.loads(zone_json.read_text()) if zone_json.is_file() else None
-        zone, notes = build_zone(slug, config, client, existing, config_path)
+        zone, notes = build_zone(slug, config, client, existing, config_path, maps_dir)
         zone_json.parent.mkdir(parents=True, exist_ok=True)
         zone_json.write_text(json.dumps(zone, indent=2, ensure_ascii=False) + "\n")
-        update_zone_index(data_dir, slug, zone["name"], len(zone["maps"]))
+        update_zone_index(data_dir, slug, zone["name"], len(zone["maps"]),
+                          subarea=client.subareas[zone["client_subarea"]][0])
         print(f"  {slug}: {zone['name']}: " + "; ".join(notes))
         imported += 1
     if not imported:

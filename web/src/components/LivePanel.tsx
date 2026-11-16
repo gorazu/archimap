@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
-import { mapKey } from "../data/zones";
 import type { LiveCapture } from "../live/useLiveCapture";
 
 interface Props {
   live: LiveCapture;
-  zoneMaps: ReadonlySet<string>;
+  /** Name of the zone the current position belongs to, or null if none. */
+  positionZone: string | null;
   onClose: () => void;
 }
 
@@ -16,11 +16,10 @@ const STATUS_TEXT = {
   error: "Erreur",
 } as const;
 
-export function LivePanel({ live, zoneMaps, onClose }: Props) {
+export function LivePanel({ live, positionZone, onClose }: Props) {
   const { state, options, setOptions } = live;
   const active = state.status === "running" || state.status === "paused";
   const position = state.position;
-  const inZone = position ? zoneMaps.has(mapKey(position[0], position[1])) : false;
 
   return (
     <section className="live-panel" aria-label="Capture en direct">
@@ -83,12 +82,14 @@ export function LivePanel({ live, zoneMaps, onClose }: Props) {
                   <strong>
                     [{position[0]},{position[1]}]
                   </strong>{" "}
-                  {inZone ? "· cochée" : "· hors de cette zone"}
+                  {positionZone ? `· ${positionZone}` : "· hors des zones suivies"}
                 </>
               ) : (
                 "En attente d'une lecture stable…"
               )}
             </dd>
+            <dt>Lieu</dt>
+            <dd>{state.location ?? "illisible (position seule)"}</dd>
             <dt>Lecture</dt>
             <dd>
               <code>{state.readings.length ? state.readings.map((r) => r || "—").join("  |  ") : "—"}</code>
@@ -125,9 +126,17 @@ export function LivePanel({ live, zoneMaps, onClose }: Props) {
               value={options.stableReads}
               onChange={(e) => {
                 const stableReads = Number(e.target.value);
-                setOptions({ stableReads, jumpReads: stableReads * 2 });
+                setOptions({ ...options, stableReads, jumpReads: stableReads * 2 });
               }}
             />
+          </label>
+          <label className="live-check">
+            <input
+              type="checkbox"
+              checked={options.autoZone}
+              onChange={(e) => setOptions({ ...options, autoZone: e.target.checked })}
+            />
+            Changer de zone automatiquement
           </label>
           <button type="button" className="live-link" onClick={live.recalibrate}>
             Recalibrer la détection

@@ -43,7 +43,7 @@ def test_sol_reader_round_trip(tmp_path):
 def test_load_client_data_groups_maps_by_subarea(tmp_path):
     client = fake_client(tmp_path)
     assert client.subareas[7] == ("Egout de Test", "Testville")
-    assert sorted(client.maps[7]) == [(0, 0), (1, 0), (1, 1), (1, 1)]
+    assert sorted(client.maps[7]) == [(1, (0, 0)), (2, (1, 0)), (3, (1, 1)), (4, (1, 1))]
 
 
 def test_zone_from_client_joins_neighbours_and_applies_corrections(tmp_path):
@@ -67,3 +67,18 @@ def test_recorded_zone_keeps_its_maps_and_gets_missing_ones(tmp_path):
     assert zone["links"] == [[1, 0, 1, 1]]  # only the added map is joined to its neighbours
     assert zone["tile_size"] == [100, 60] and zone["source_video"] == "v.mkv"
     assert notes[0] == "1 map(s) added to the 2 recorded ones"
+
+
+def test_reimport_does_not_duplicate_client_maps(tmp_path):
+    client = fake_client(tmp_path)
+    first, _ = build_zone("egout", {"client_subarea": 7}, client, None, tmp_path / "none.json")
+    again, _ = build_zone("egout", {"client_subarea": 7}, client, first, tmp_path / "none.json")
+    assert [(m["x"], m["y"]) for m in again["maps"]] == [(m["x"], m["y"]) for m in first["maps"]]
+
+
+def test_reimport_rebuilds_passages_of_client_zones(tmp_path):
+    client = fake_client(tmp_path)
+    stale = {"zone": "egout", "name": "x", "source_video": None, "tile_size": [1, 1],
+             "maps": [{"x": 0, "y": 0, "source": "client"}], "links": [[0, 0, 5, 5]]}
+    zone, _ = build_zone("egout", {"client_subarea": 7}, client, stale, tmp_path / "none.json")
+    assert [0, 0, 5, 5] not in zone["links"]
