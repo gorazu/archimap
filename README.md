@@ -12,7 +12,7 @@ cd ../web && bun install
 
 ## Phase 1: video → map data
 
-Record the whole Dofus window (any size) with the **modern UI** option enabled. Run from `pipeline/` (outputs go to `../web/public/data/` and `../out/`):
+Record the whole Dofus window (any size) with the **modern UI** option enabled and the **chat on the right side** of the window (the game area is found from the chat panel's border). Run from `pipeline/` (outputs go to `../web/public/data/` and `../out/`):
 
 ```sh
 uv run python -m archimap.extract ../samples/clip.mkv --zone my-zone --name "My zone"
@@ -84,7 +84,7 @@ The site is deployed on Vercel from GitHub: the Vercel project imports `gorazu/a
 
 ## Phase 3: live capture
 
-In desktop Chrome or Edge, open a zone and click **Direct**, then **Démarrer la capture** and share the Dofus Retro window (modern UI enabled, any window size). Archimap finds the game area and the coordinates by itself, reads them about twice per second, and checks each map you walk onto. The current map is outlined in blue and kept in view.
+In desktop Chrome or Edge, open a zone and click **Direct**, then **Démarrer la capture** and share the Dofus Retro window (any window size). Before starting, enable the **modern UI** option and place the **chat on the right side** of the window: the game area is found from the chat panel and UI bar borders. Archimap finds the game area and the coordinates by itself, reads them about twice per second, and checks each map you walk onto. The current map is outlined in blue and kept in view.
 
 - A position is confirmed after a few identical readings in a row (the **Stabilité** setting). A jump to a map that isn't next to the current one (teleport) needs twice as many.
 - The panel shows what OCR reads and the crop it reads from, which helps when something looks off. **Recalibrer** finds the layout again, for example after changing the interface.

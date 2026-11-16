@@ -304,6 +304,19 @@ body,
   line-height: 1.45;
 }
 
+.live-hint p,
+.live-hint ul {
+  margin: 0 0 6px;
+}
+
+.live-hint ul {
+  padding-left: 18px;
+}
+
+.live-hint li {
+  color: var(--text);
+}
+
 .live-info {
   display: grid;
   grid-template-columns: auto 1fr;

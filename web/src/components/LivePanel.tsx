@@ -58,10 +58,19 @@ export function LivePanel({ live, zoneMaps, onClose }: Props) {
       </div>
 
       {!active && state.status !== "starting" && (
-        <p className="live-hint">
-          Partagez la fenêtre Dofus Retro, avec l'option <em>interface moderne</em> activée. Chaque carte où vous
-          passez est cochée automatiquement. L'image reste dans votre navigateur.
-        </p>
+        <div className="live-hint">
+          <p>Avant de démarrer, dans Dofus Retro :</p>
+          <ul>
+            <li>
+              activez l'option <em>interface moderne</em> ;
+            </li>
+            <li>placez le chat sur le côté droit de la fenêtre.</li>
+          </ul>
+          <p>
+            Partagez ensuite la fenêtre du jeu (n'importe quelle taille). Chaque carte où vous passez est cochée
+            automatiquement. L'image reste dans votre navigateur.
+          </p>
+        </div>
       )}
 
       {active && (

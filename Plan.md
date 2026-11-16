@@ -124,7 +124,7 @@ archimap/
   - `samples/egouts-de-bonta-window.mkv` (full Dofus window, 1920x1080) is now the standard recording setup: 37 visits → 32 maps with `--coords-box 175,58,150,34 --view-box 0,0,1371,837`. Live mode (phase 3) can reuse these boxes.
   - OCR keeps near-white text pixels (`--text-threshold`, default 185), thickens the strokes, and falls back to Otsu; Otsu alone failed on light walls. Confidence is the share of sampled frames that agree, because Tesseract reports 0 for correct text when the character set is restricted.
   - Loading fades can be very short (~0.15 s fully dark), so a frame much darker than the visit's recent brightness also counts as loading (`--dip-ratio 0.6`), and the default sampling rate is now 10 fps.
-- Any capture size (requires the **modern UI** option in Dofus Retro, which scales the interface evenly). `archimap/layout.py`:
+- Any capture size (requires the **modern UI** option in Dofus Retro, which scales the interface evenly, and the chat on the right side of the window). `archimap/layout.py`:
   - The game area is found from the chat panel and UI bar borders, using the median edge strength over frames of different maps.
   - The coordinates box is sized from the "Coordonnées" label found by OCR in the top-left corner of the game area. If the label isn't found, a default position relative to the game area is used.
   - OCR crops are resized to a fixed height (`OCR_HEIGHT`). Each crop is read with two binarizations (fixed threshold 160, and 0.7 × the crop's brightest text with thickened strokes), because each one fails at different sizes. When a map's vote is uncertain (< 75%), `resolve_with_route` picks the candidate next to the neighbouring maps.
