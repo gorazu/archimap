@@ -7,6 +7,8 @@ interface Props {
   positionZone: string | null;
   /** Where to go next, on the shortest walk over the maps left to check. */
   guide: { next: string; rest: string | null; unreachable: number } | null;
+  /** The floating guide window, when the browser has it. */
+  floating?: { open: boolean; onToggle: () => void };
   onClose: () => void;
 }
 
@@ -18,7 +20,7 @@ const STATUS_TEXT = {
   error: "Erreur",
 } as const;
 
-export function LivePanel({ live, positionZone, guide, onClose }: Props) {
+export function LivePanel({ live, positionZone, guide, floating, onClose }: Props) {
   const { state, options, setOptions } = live;
   const active = state.status === "running" || state.status === "paused";
   const position = state.position;
@@ -54,6 +56,12 @@ export function LivePanel({ live, positionZone, guide, onClose }: Props) {
         {active && (
           <button type="button" onClick={live.stop}>
             Arrêter
+          </button>
+        )}
+        {floating && (
+          <button type="button" onClick={floating.onToggle} aria-pressed={floating.open}
+            title="Une petite fenêtre toujours au premier plan, au-dessus du jeu">
+            {floating.open ? "Fermer la fenêtre flottante" : "Fenêtre flottante"}
           </button>
         )}
       </div>

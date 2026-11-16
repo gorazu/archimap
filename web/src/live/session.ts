@@ -18,6 +18,7 @@ import {
 } from "./layout";
 import { parseLocation } from "./location";
 import { binarize, parseCoords, readingValue, TEXT_VARIANTS, type Coords } from "./ocr";
+import { Ticker } from "./ticker";
 import { PositionTracker, type TrackerOptions } from "./tracker";
 
 export type LiveStatus = "idle" | "starting" | "running" | "paused" | "error";
@@ -90,7 +91,8 @@ export class LiveSession {
   private frame: HTMLCanvasElement | null = null;
   private digits: Worker | null = null;
   private words: Worker | null = null;
-  private timer: number | null = null;
+  private ticker: Ticker | null = null;
+  private cancelTick: (() => void) | null = null;
   /** The check in progress, so stopping can wait for its OCR jobs to end. */
   private busy: Promise<void> = Promise.resolve();
   private tracker = new PositionTracker();
@@ -143,12 +145,15 @@ export class LiveSession {
     }
     if (!this.stream) return; // Stopped while loading.
     this.update({ status: "running", message: null });
+    this.ticker = new Ticker();
     this.schedule();
   }
 
   stop() {
-    if (this.timer !== null) clearTimeout(this.timer);
-    this.timer = null;
+    this.cancelTick?.();
+    this.cancelTick = null;
+    this.ticker?.close();
+    this.ticker = null;
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     this.video = null;
@@ -193,7 +198,8 @@ export class LiveSession {
   }
 
   private schedule() {
-    this.timer = window.setTimeout(async () => {
+    if (!this.ticker) return;
+    this.cancelTick = this.ticker.after(TICK_MS, async () => {
       try {
         if (this.state.status === "running") {
           this.busy = this.tick();
@@ -203,7 +209,7 @@ export class LiveSession {
         console.error(e);
       }
       if (this.stream) this.schedule();
-    }, TICK_MS);
+    });
   }
 
   private async tick() {

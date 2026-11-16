@@ -521,3 +521,83 @@ body,
 .map .next-sun {
   animation: current-pulse 1s ease-in-out infinite;
 }
+
+/* Floating guide window (Document Picture-in-Picture). */
+.floating-body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.floating {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  font-size: 13px;
+}
+
+.floating-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.floating-head strong {
+  color: var(--accent);
+}
+
+.floating-guide strong {
+  display: block;
+  font-size: 16px;
+  color: #4fc3ff;
+}
+
+.floating-guide div {
+  color: var(--muted);
+}
+
+.floating-note {
+  margin: 8px 0;
+  color: var(--muted);
+}
+
+.mini-map {
+  width: 100%;
+  height: auto;
+}
+
+.mini-tile {
+  fill: #2b241b;
+}
+
+.mini-checked {
+  fill: #2f8f2f;
+  fill-opacity: 0.45;
+}
+
+.mini-current {
+  fill: none;
+  stroke: #4fc3ff;
+  stroke-width: 3;
+}
+
+.mini-label {
+  fill: #f1e4c2;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.mini-move {
+  stroke: #4fc3ff;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.mini-sun {
+  fill: #ffc94d;
+  stroke: #4fc3ff;
+  stroke-width: 3;
+  animation: current-pulse 1s ease-in-out infinite;
+}

@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { FloatingGuide, FloatingWindow, FLOATING_SUPPORTED, useFloatingWindow } from "./components/FloatingGuide";
 import { Header } from "./components/Header";
 import { LivePanel } from "./components/LivePanel";
 import { ZoneMap } from "./components/ZoneMap";
@@ -220,6 +221,9 @@ export function App() {
     return guideFrom(plan.route, progress, graph, [...cameFrom, ...here.filter((i) => !cameFrom.includes(i))]);
   }, [guiding, plan, progress, graph, current, previousMap]);
   const left = zone ? zone.maps.filter((m) => !checked.has(mapKey(m.x, m.y))).length : 0;
+  const guide = guidance && progress && graph && plan
+    ? guideText(guidance, progress, graph, left, plan.route.unreachable.length) : null;
+  const floating = useFloatingWindow();
 
   // Ignore stored keys for maps that are no longer in the zone.
   const checkedCount = useMemo(
@@ -286,10 +290,25 @@ export function App() {
           <LivePanel
             live={live}
             positionZone={positionZone ? (zones?.find((z) => z.zone === positionZone)?.name ?? null) : null}
-            guide={guidance && progress && graph && plan
-              ? guideText(guidance, progress, graph, left, plan.route.unreachable.length) : null}
+            guide={guide}
+            floating={FLOATING_SUPPORTED ? { open: floating.win !== null, onToggle: floating.win ? floating.close : floating.open } : undefined}
             onClose={() => setLiveOpen(false)}
           />
+        )}
+        {floating.win && zone && (
+          <FloatingWindow win={floating.win}>
+            <FloatingGuide
+              zone={zone}
+              checked={checked}
+              checkedCount={checkedCount}
+              active={live.state.status === "running" || live.state.status === "paused"}
+              current={current}
+              elsewhere={position && !current ? `[${position[0]},${position[1]}]` : null}
+              guide={guide}
+              nextStep={guidance?.step ?? null}
+              graph={graph}
+            />
+          </FloatingWindow>
         )}
       </main>
     </div>
