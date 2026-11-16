@@ -1,6 +1,10 @@
 # Archimap
 
-Interactive map of Dofus Retro underground zones, built from gameplay videos, for archimonster hunting. See [Plan.md](Plan.md) for the full plan.
+Interactive map of Dofus Retro zones (sewers, underground passages, labyrinth forests) for archimonster hunting: tick off every map of a zone as you visit it, by hand or automatically from a live capture of the game. See [Plan.md](Plan.md) for the full plan and the project's history.
+
+Zones are built from the **Dofus Retro client's own files**: the list of maps of each sub-area with their coordinates, and each map's layout (floor, walls and the suns that lead to the next map). A gameplay recording can be added on top, to confirm passages or to cover maps the client can't read.
+
+Current zones: Égouts de Bonta, Égouts de Brâkmar, Forêt maléfique, Sanctuaire des Dragoeufs, Sous-terrain des Dragoeufs, Souterrain d'Astrub, Souterrain profond d'Astrub, Souterrain du Château d'Amakna.
 
 ## Setup
 
@@ -10,98 +14,101 @@ cd pipeline && uv sync
 cd ../web && bun install
 ```
 
-## Phase 1: video → map data
+`ffmpeg` and `tesseract` are only needed for gameplay recordings.
 
-Record the whole Dofus window (any size) with the **modern UI** option enabled and the **chat on the right side** of the window (the game area is found from the chat panel's border). Run from `pipeline/` (outputs go to `../web/public/data/` and `../out/`):
+## Adding a zone from the game client
 
-```sh
-uv run python -m archimap.extract ../samples/clip.mkv --zone my-zone --name "My zone"
-```
-
-The game area (left of the chat panel, above the UI bar) and the coordinates (next to the "Coordonnées" label) are found automatically at any capture size; the run prints the boxes it used. To check them on one frame first (red = coordinates, green = game area):
+Needs the Dofus Retro client installed and started at least once **in French** (the game caches its data on first launch; live mode matches the French sub-area names shown in game). Run from `pipeline/`:
 
 ```sh
-uv run python -m archimap.extract ../samples/clip.mkv --preview 5
+uv run python -m archimap.client_zones list Egout   # find a sub-area's id
 ```
 
-If detection goes wrong on an unusual setup, set the boxes by hand with `--coords-box` and `--view-box` (pixels, `x,y,w,h`).
-
-Then open `out/my-zone/report.html` to review the detected maps. Maps with an orange border were placed by inference rather than OCR, so check those first.
-
-Useful options:
-
-| Option | Purpose |
-| --- | --- |
-| `--coords-box X,Y,W,H` | Area showing the coordinate numbers (default: found from the "Coordonnées" label). |
-| `--view-box X,Y,W,H` | Game area to keep in tiles (default: detected from the chat panel and UI bar borders). |
-| `--start X,Y` | Coordinates of the first map, if OCR can't read it. |
-| `--fps N` | Sampling rate (default 10). |
-| `--dark-mean`, `--uniform-std`, `--dip-ratio` | Loading-frame thresholds, if map changes are missed or over-detected. |
-| `--text-threshold N` | Read the coordinates with one fixed brightness threshold (0-255) instead of the default pair tuned for any capture size. |
-| `--cut-diff N` | Also split on big frame jumps without a loading frame (off by default). |
-
-Tests: `cd pipeline && uv run pytest`
-
-Each run also adds the zone to `web/public/data/zones.json`, which the web map reads to list the zones.
-
-## Phase 2: web map
-
-```sh
-cd web
-bun run dev        # http://localhost:5173
-bun run build      # static site in web/dist/, host it anywhere
-bun run test       # unit tests (progress store, tile geometry)
-```
-
-To try the map without a video, write three mock zones (and remove them later):
-
-```sh
-cd pipeline
-uv run python -m archimap.mock          # mock-grotte, mock-souterrain, mock-donjon
-uv run python -m archimap.mock --clean  # removes only the mock-* zones
-```
-
-The map is a **plan**: one drawn tile per map, with corridors for the passages walked in the recording (saved as `links` in `zone.json`).
-
-Click or tap a map to mark it checked. Hover (desktop) or tap (mobile) shows its coordinates. Progress is saved in the browser per zone, and **Nouvelle chasse** clears it. The selected zone is kept in the URL (`#zone-slug`), so you can link to it.
-
-### Zones from the game client
-
-Zones can also be built without a video, from the map data the Dofus Retro client caches on your computer (start the game once). Each zone is defined in `zones/<zone>.json`:
+Each zone is a file `zones/<zone>.json`, its name being the zone's slug:
 
 ```json
 { "client_subarea": 75, "name": "Égouts de Brâkmar", "add_links": [], "remove_links": [] }
 ```
 
 ```sh
-uv run python -m archimap.client_zones list Egout   # find sub-area ids
-uv run python -m archimap.client_zones import       # (re)build every zone with a "client_subarea"
+uv run python -m archimap.client_zones import       # (re)build every zone in zones/
 ```
 
-Passages come from the **suns** in the client's map files (`data/maps/*.swf` of the installed game, found automatically; `--client-maps` to point elsewhere): a sun on a map's edge is a passage to the neighbouring map on that side. Only the unencrypted map files the client ships are read; maps without one (16% of maps, such as all of Caverne des Fungus) are joined to all their neighbours, so list walls in `remove_links`. On Égouts de Bonta, the suns find every passage walked in the recording. Some maps are split into separate walkable parts, each with its own suns (the Forêt maléfique is a labyrinth): the plan shows each path separately. Paths follow the real floor: solid lines are walking routes between a map's suns (shortest walk over its cells), dashed lines are map changes, from the sun you leave by to the sun you arrive at. The **Chemins** button shows or hides them. Each tile also shows its map's own **layout**, drawn from the same files: floor, walls and obstacles, suns in yellow, and on split maps each part with an exit in its own colour. These map files are the old unencrypted versions, so decoration may differ slightly from today's maps. For a zone that also has a recording, the recorded maps and walked passages are kept and only the maps the recording missed are added. Sub-areas where many maps share the same coordinates (Souterrain d'Amakna, Grotte Hesque…) can't be used: Archimap tells maps apart by their coordinates.
+This writes `web/public/data/<zone>/zone.json` and adds the zone to `web/public/data/zones.json`. The game files are found automatically on macOS and Windows; `--client-data`, `--client-maps` and `--language` point elsewhere.
 
-### Fixing passages on the plan
+What comes from the client:
 
-Corridors on the plan are the passages walked in the recording (two maps visited one right after the other). Passages you didn't walk are missing, and two neighbouring maps aren't always connected. Fix them in `zones/<zone>.json` (the same file can also define a client zone, see above):
+- **Maps:** every map of the sub-area, by coordinates. Sub-areas where many maps share the same coordinates (Souterrain d'Amakna, Grotte Hesque, Village des Dragoeufs…) can't be used: Archimap tells maps apart by their coordinates, and the plan would show far fewer tiles than the zone has maps.
+- **Passages:** from the **suns** in each map's file. A sun on a map's edge is a passage to the neighbouring map on that side, when that map has an exit back; ladders and doors inside closed rooms count too. On Égouts de Bonta, this finds every passage walked in a recording.
+- **Layouts and paths:** each map's floor, walls and suns, and the walking routes between its suns. Some maps are split into separate parts, each with its own suns (the Forêt maléfique is a labyrinth); each part and each path is drawn separately.
+
+Limits: only the unencrypted map files the client ships can be read. They are older versions of the maps (2005): exits match today's game, but decoration may differ. About 16% of maps have no such file (all of Caverne des Fungus, for example); those are joined to all their neighbours instead, which is why Caverne des Fungus isn't included.
+
+### Fixing passages
+
+Add missing passages or remove wrong ones in the zone's file, as `[x1, y1, x2, y2]` pairs of neighbouring maps:
 
 ```json
 {
+  "client_subarea": 73,
+  "name": "Égouts de Bonta",
   "add_links": [[-33, -58, -32, -58]],
   "remove_links": []
 }
 ```
 
-The pipeline applies this file on every run. To apply it right away without reprocessing the video, run `uv run python -m archimap.corrections <zone>` from `pipeline/`, then commit `zones/` and the zone data.
+They are applied on every import. To apply them right away to an existing zone, run `uv run python -m archimap.corrections <zone>`.
 
-### Deployment
+## Adding a gameplay recording (optional)
 
-The site is deployed on Vercel from GitHub: the Vercel project imports `gorazu/archimap` with **Root Directory** set to `web`, and `web/vercel.json` sets the Bun install, the Vite build and the `dist` output. Every push to `main` redeploys; commit regenerated zone data in `web/public/data/` to publish it.
+A recording of the character walking through a zone gives the passages actually walked, and covers maps whose files the client can't read. Record the whole Dofus window (any size) with the **modern UI** option enabled and the **chat on the right side** of the window. Run from `pipeline/`:
 
-## Phase 3: live capture
+```sh
+uv run python -m archimap.extract ../samples/clip.mkv --zone my-zone --name "My zone"
+```
 
-In desktop Chrome or Edge, open a zone and click **Direct**, then **Démarrer la capture** and share the Dofus Retro window (any window size). Before starting, enable the **modern UI** option and place the **chat on the right side** of the window: the game area is found from the chat panel and UI bar borders. Archimap finds the game area and the coordinates by itself, reads them about twice per second, and checks each map you walk onto. The current map is outlined in blue and kept in view.
+The game area and the coordinates are found automatically; the run prints the boxes it used, and `--preview 5` draws them on the frame at 5 s. Coordinates are read with OCR and checked against the route (consecutive maps must be neighbours). Then open `out/my-zone/report.html` to review the detected maps.
 
-- Live mode also reads the game's location line ("Bonta (**Egout de Bonta**) - Bontarien"). The sub-area in parentheses tells which zone you're in, so walking from one zone into another (Souterrain d'Astrub → Souterrain profond d'Astrub, for example) switches the map automatically (**Changer de zone automatiquement**, on by default). It also keeps maps from being checked while you walk on the surface above an underground zone, which has the same coordinates. When the line can't be read, the coordinates decide.
+If the zone also has a `zones/<zone>.json` with a `client_subarea`, the recorded maps and walked passages are kept and the client data adds the maps the recording missed, the layouts and the sun passages. Égouts de Bonta was built this way.
+
+| Option | Purpose |
+| --- | --- |
+| `--coords-box X,Y,W,H` | Area showing the coordinate numbers (default: found from the "Coordonnées" label). |
+| `--view-box X,Y,W,H` | Game area (default: detected from the chat panel and UI bar borders). |
+| `--start X,Y` | Coordinates of the first map, if OCR can't read it. |
+| `--fps N` | Sampling rate (default 10). |
+| `--dark-mean`, `--uniform-std`, `--dip-ratio` | Loading-frame thresholds, if map changes are missed or over-detected. |
+| `--text-threshold N` | Read the coordinates with one fixed brightness threshold (0-255). |
+| `--cut-diff N` | Also split on big frame jumps without a loading frame (off by default). |
+
+Videos stay out of git (`samples/` is ignored).
+
+## Web map
+
+```sh
+cd web
+bun run dev        # http://localhost:5173
+bun run build      # static site in web/dist/
+bun run test       # unit tests
+```
+
+The map is a plan with one tile per map, showing the map's layout: floor, walls, suns in yellow, and on split maps each part with an exit in its own colour. Solid lines are walking routes between a map's suns, dashed lines are map changes; the **Chemins** button shows or hides them.
+
+Click or tap a map to mark it checked. Hover (desktop) or tap (mobile) shows its coordinates. Progress is saved in the browser per zone, and **Nouvelle chasse** clears it. The selected zone is kept in the URL (`#zone-slug`), so you can link to it.
+
+To try the app without game data, `uv run python -m archimap.mock` (from `pipeline/`) writes three mock zones, and `--clean` removes them.
+
+## Live capture
+
+In desktop Chrome or Edge, open a zone and click **Direct**, then **Démarrer la capture** and share the Dofus Retro window (any window size). Before starting, enable the **modern UI** option and place the **chat on the right side** of the window: the game area is found from the chat panel and UI bar borders. Archimap reads the coordinates about twice per second and checks each map you walk onto. The current map is outlined in blue and kept in view.
+
+- Live mode also reads the game's location line ("Bonta (**Egout de Bonta**) - Bontarien"). The sub-area in parentheses tells which zone you're in, so walking from one zone into another switches the map automatically (**Changer de zone automatiquement**, on by default). It also keeps maps from being checked while you walk on the surface above an underground zone, which has the same coordinates. When the line can't be read, the coordinates decide.
 - A position is confirmed after a few identical readings in a row (the **Stabilité** setting). A jump to a map that isn't next to the current one (teleport) needs twice as many.
 - The panel shows what OCR reads and the crop it reads from, which helps when something looks off. **Recalibrer** finds the layout again, for example after changing the interface.
-- Frames stay in the browser. Tesseract.js downloads its OCR engine and English data from a CDN the first time.
+- Nothing is uploaded. Tesseract.js downloads its OCR engine and English data from a CDN the first time.
+
+## Deployment
+
+The site is deployed on Vercel from GitHub: the Vercel project imports `gorazu/archimap` with **Root Directory** set to `web`, and `web/vercel.json` sets the Bun install, the Vite build and the `dist` output. Every push to `main` redeploys; commit the zone files (`zones/`) and the generated data (`web/public/data/`) to publish a zone.
+
+Tests: `cd pipeline && uv run pytest`, and `cd web && bun run test`.
