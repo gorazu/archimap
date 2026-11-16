@@ -1,12 +1,6 @@
 {
   "zones": [
     {
-      "zone": "caverne-des-fungus",
-      "name": "Caverne des Fungus",
-      "maps": 30,
-      "subarea": "Caverne des Fungus"
-    },
-    {
       "zone": "souterrain-astrub",
       "name": "Souterrain d'Astrub",
       "maps": 6,
