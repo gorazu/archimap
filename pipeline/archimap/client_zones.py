@@ -33,10 +33,12 @@ from .sol import read_sol
 Coords = tuple[int, int]
 # Tile aspect for zones without screenshots: the game area of a full-window capture.
 DEFAULT_TILE_SIZE = [1371, 839]
+# Any client's data folder ("Dofus Retro", or a server's own client such as
+# "Abrak Retro"): the newest cache wins.
 _SO_ROOTS = [
-    "~/Library/Application Support/Dofus Retro/Pepper Data/Shockwave Flash/WritableRoot/#SharedObjects",
+    "~/Library/Application Support/*/Pepper Data/Shockwave Flash/WritableRoot/#SharedObjects",
     os.path.join(os.environ.get("APPDATA", "~/AppData/Roaming"),
-                 "Dofus Retro/Pepper Data/Shockwave Flash/WritableRoot/#SharedObjects"),
+                 "*/Pepper Data/Shockwave Flash/WritableRoot/#SharedObjects"),
 ]
 
 
@@ -47,13 +49,29 @@ class ClientData:
     source: Path
 
 
-def find_client_data() -> Path | None:
-    """Newest cached maps file (ANKXTRASO_*_MA.sol) of an installed client."""
+def _cache_language(maps_file: Path) -> str | None:
+    """Language of a cached data copy, from the language file saved next to it."""
+    copy = maps_file.name.split("_")[1]  # ANKXTRASO_<copy>_MA.sol
+    lang = maps_file.with_name(f"ANKLANGSO_{copy}.sol")
+    try:
+        return str(read_sol(lang)["_Data"].get("LANGUAGE")) if lang.is_file() else None
+    except (KeyError, ValueError):
+        return None
+
+
+def find_client_data(language: str | None = "fr") -> Path | None:
+    """Newest cached maps file (ANKXTRASO_*_MA.sol) of an installed client.
+
+    Sub-area names must be in the game's language (live mode matches them
+    with the location line on screen), so only caches in `language` count.
+    """
     found = []
     for root in _SO_ROOTS:
         pattern = os.path.join(os.path.expanduser(root), "*", "localhost", "**", "ANKXTRASO_*_MA.sol")
-        found += glob.glob(pattern, recursive=True)
-    return Path(max(found, key=os.path.getmtime)) if found else None
+        found += [Path(p) for p in glob.glob(pattern, recursive=True)]
+    if language:
+        found = [p for p in found if _cache_language(p) == language]
+    return max(found, key=os.path.getmtime) if found else None
 
 
 def load_client_data(path: Path) -> ClientData:
@@ -133,14 +151,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("search", nargs="?", default="", help="list: only sub-areas whose name contains this")
     p.add_argument("--client-data", type=Path, help="a cached ANKXTRASO_*_MA.sol file")
     p.add_argument("--client-maps", type=Path, help="the client's data/maps folder (for passages)")
+    p.add_argument("--language", default="fr",
+                   help="language of the game, for sub-area names (default: fr)")
     p.add_argument("--data-dir", type=Path,
                    help="where zone folders are written (default: <repo>/web/public/data)")
     args = p.parse_args(argv)
 
-    source = args.client_data or find_client_data()
+    source = args.client_data or find_client_data(args.language)
     if source is None or not source.is_file():
-        print("error: Dofus Retro client data not found. Start the game once, or pass --client-data.",
-              file=sys.stderr)
+        print(f"error: Dofus Retro client data in '{args.language}' not found. Start the game once "
+              "in that language, or pass --client-data.", file=sys.stderr)
         return 2
     client = load_client_data(source)
     print(f"Client data: {source.name} ({sum(map(len, client.maps.values()))} maps)")

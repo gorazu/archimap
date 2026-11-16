@@ -82,3 +82,20 @@ def test_reimport_rebuilds_passages_of_client_zones(tmp_path):
              "maps": [{"x": 0, "y": 0, "source": "client"}], "links": [[0, 0, 5, 5]]}
     zone, _ = build_zone("egout", {"client_subarea": 7}, client, stale, tmp_path / "none.json")
     assert [0, 0, 5, 5] not in zone["links"]
+
+
+def test_find_client_data_picks_the_newest_cache_in_the_language(tmp_path, monkeypatch):
+    import os
+    from archimap import client_zones
+    caches = {}
+    for folder, copy, lang, mtime in (("Old", "0", "fr", 100), ("New", "0", "en", 300), ("New", "1", "fr", 200)):
+        d = tmp_path / folder / "Pepper Data/Shockwave Flash/WritableRoot/#SharedObjects/X/localhost/game"
+        d.mkdir(parents=True, exist_ok=True)
+        write_sol(d / f"ANKXTRASO_{copy}_MA.sol", {"_Data": {"MA": {}}})
+        write_sol(d / f"ANKLANGSO_{copy}.sol", {"_Data": {"LANGUAGE": lang}})
+        os.utime(d / f"ANKXTRASO_{copy}_MA.sol", (mtime, mtime))
+        caches[(folder, copy)] = d / f"ANKXTRASO_{copy}_MA.sol"
+    monkeypatch.setattr(client_zones, "_SO_ROOTS", [str(tmp_path / "*" / "Pepper Data/Shockwave Flash/WritableRoot/#SharedObjects")])
+    assert client_zones.find_client_data("fr") == caches[("New", "1")]
+    assert client_zones.find_client_data("en") == caches[("New", "0")]
+    assert client_zones.find_client_data(None) == caches[("New", "0")]
