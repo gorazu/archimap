@@ -68,7 +68,7 @@ export function LivePanel({ live, zoneMaps, onClose }: Props) {
           </ul>
           <p>
             Partagez ensuite la fenêtre du jeu (n'importe quelle taille). Chaque carte où vous passez est cochée
-            automatiquement. L'image reste dans votre navigateur.
+            automatiquement.
           </p>
         </div>
       )}
