@@ -14,6 +14,8 @@ every one of the 83 passages walked in the recording is found.
 
 from __future__ import annotations
 
+import collections
+
 import glob
 import os
 import struct
@@ -325,6 +327,8 @@ def passages_between(areas: dict[Coords, list[Area]]) -> list[Passage]:
     position along the shared edge. When one side has a single area, every
     area of the other side with an exit connects to it.
     """
+    corners = {c: {uv for uv, n in collections.Counter(e.uv for part in parts for e in part.exits if not e.inner).items() if n > 1}
+               for c, parts in areas.items()}
     passages = []
     for (x, y) in sorted(areas):
         for side in ("right", "bottom"):  # each neighbour pair once
@@ -333,8 +337,11 @@ def passages_between(areas: dict[Coords, list[Area]]) -> list[Passage]:
             if other not in areas:
                 continue
             back = "left" if side == "right" else "top"
-            here = [(i, e) for i, part in enumerate(areas[(x, y)]) for e in part.exits if e.side == side]
-            there = [(j, e) for j, part in enumerate(areas[other]) for e in part.exits if e.side == back]
+            # A sun in a corner counts on two sides: one only on this edge comes first.
+            here = sorted(((i, e) for i, part in enumerate(areas[(x, y)]) for e in part.exits if e.side == side),
+                          key=lambda o: o[1].uv in corners[(x, y)])
+            there = sorted(((j, e) for j, part in enumerate(areas[other]) for e in part.exits if e.side == back),
+                           key=lambda o: o[1].uv in corners[other])
             connected = ((any(not e.inner for _, e in here) and there) or any(e.inner for _, e in here)
                          or (any(not e.inner for _, e in there) and here) or any(e.inner for _, e in there))
             if not connected:

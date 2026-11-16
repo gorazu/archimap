@@ -153,3 +153,12 @@ def test_entrances_are_exits_leading_out_of_the_zone():
     found = find_entrances(areas, passages)
     # The corner sun serves the passage to (1,0): not an entrance. The ladder is.
     assert [(e.coords, e.kind, e.towards) for e in found] == [((0, 0), "ladder", (0, 0))]
+
+
+def test_a_sun_only_on_the_edge_is_preferred_to_a_corner_one():
+    corner = (0.86, 0.06)  # top-right corner: counts on the top and the right
+    areas = {(6, -14): [Area((0.5, 0.4), [Exit("top", 0.86, uv=corner), Exit("right", 0.06, uv=corner),
+                                           Exit("right", 0.59, uv=(0.96, 0.59))])],
+             (7, -14): [Area((0.3, 0.8), [Exit("left", 0.66, uv=(0.04, 0.66))])]}
+    [p] = passages_between(areas)
+    assert (p.ua, p.ub) == ((0.96, 0.59), (0.04, 0.66))
