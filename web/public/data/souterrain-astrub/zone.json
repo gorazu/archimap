@@ -1,0 +1,80 @@
+{
+  "zone": "souterrain-astrub",
+  "name": "Souterrain d'Astrub",
+  "source_video": null,
+  "tile_size": [
+    1371,
+    839
+  ],
+  "maps": [
+    {
+      "x": 5,
+      "y": -21,
+      "source": "client"
+    },
+    {
+      "x": 4,
+      "y": -20,
+      "source": "client"
+    },
+    {
+      "x": 5,
+      "y": -20,
+      "source": "client"
+    },
+    {
+      "x": 4,
+      "y": -19,
+      "source": "client"
+    },
+    {
+      "x": 5,
+      "y": -19,
+      "source": "client"
+    },
+    {
+      "x": 6,
+      "y": -19,
+      "source": "client"
+    }
+  ],
+  "links": [
+    [
+      4,
+      -20,
+      4,
+      -19
+    ],
+    [
+      4,
+      -20,
+      5,
+      -20
+    ],
+    [
+      4,
+      -19,
+      5,
+      -19
+    ],
+    [
+      5,
+      -21,
+      5,
+      -20
+    ],
+    [
+      5,
+      -20,
+      5,
+      -19
+    ],
+    [
+      5,
+      -19,
+      6,
+      -19
+    ]
+  ],
+  "client_subarea": 99
+}

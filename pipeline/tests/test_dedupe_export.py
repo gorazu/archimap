@@ -33,18 +33,15 @@ def test_export_zone(tmp_path):
     assert data["zone"] == "test-zone"
     assert data["tile_size"] == [320, 180]
     assert data["maps"][0] == {
-        "x": -5, "y": 12, "tile": "tiles/-5_12.webp", "thumb": "thumbs/-5_12.png",
-        "source": "ocr", "confidence": 0.877, "video_time": 0.5,
+        "x": -5, "y": 12, "source": "ocr", "confidence": 0.877, "video_time": 0.5,
     }
-    for m in data["maps"]:
-        assert (tmp_path / "test-zone" / m["tile"]).is_file()
-        assert (tmp_path / "test-zone" / m["thumb"]).is_file()
 
 
-def test_export_replaces_stale_tiles(tmp_path):
+def test_export_removes_old_screenshots(tmp_path):
+    (tmp_path / "z" / "tiles").mkdir(parents=True)
+    (tmp_path / "z" / "tiles" / "0_0.webp").write_bytes(b"x")
     export_zone([visit(0, (0, 0), "ocr")], "z", "z", "a.mp4", tmp_path)
-    export_zone([visit(1, (1, 1), "ocr")], "z", "z", "b.mp4", tmp_path)
-    assert [p.name for p in (tmp_path / "z" / "tiles").iterdir()] == ["1_1.webp"]
+    assert sorted(p.name for p in (tmp_path / "z").iterdir()) == ["zone.json"]
 
 
 def test_update_zone_index(tmp_path):

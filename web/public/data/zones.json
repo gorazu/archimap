@@ -1,9 +1,34 @@
 {
   "zones": [
     {
+      "zone": "caverne-des-fungus",
+      "name": "Caverne des Fungus",
+      "maps": 30
+    },
+    {
+      "zone": "souterrain-astrub",
+      "name": "Souterrain d'Astrub",
+      "maps": 6
+    },
+    {
+      "zone": "souterrain-chateau-amakna",
+      "name": "Souterrain du Château d'Amakna",
+      "maps": 26
+    },
+    {
+      "zone": "souterrain-profond-astrub",
+      "name": "Souterrain profond d'Astrub",
+      "maps": 8
+    },
+    {
       "zone": "egouts-de-bonta",
       "name": "Égouts de Bonta",
-      "maps": 80
+      "maps": 82
+    },
+    {
+      "zone": "egouts-de-brakmar",
+      "name": "Égouts de Brâkmar",
+      "maps": 78
     }
   ]
 }

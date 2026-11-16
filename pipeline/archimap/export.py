@@ -1,4 +1,4 @@
-"""Write tiles, thumbnails and zone.json for the web map."""
+"""Write zone.json for the web map."""
 
 from __future__ import annotations
 
@@ -6,50 +6,31 @@ import json
 import shutil
 from pathlib import Path
 
-import cv2
-from PIL import Image
-
 from .models import MapVisit
-
-THUMB_WIDTH = 96
-
-
-def to_pil(image) -> Image.Image:
-    return Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
 
 def export_zone(maps: list[MapVisit], zone: str, name: str, source_video: str,
-                data_dir: Path, quality: int = 80,
+                data_dir: Path,
                 links: list[tuple[tuple[int, int], tuple[int, int]]] = ()) -> Path:
-    """Replace the zone's tiles and thumbs and write zone.json.
+    """Write the zone's zone.json.
 
     `links` are the passages between maps, drawn as corridors on the web plan.
     """
     zone_dir = data_dir / zone
+    zone_dir.mkdir(parents=True, exist_ok=True)
+    # Screenshots were dropped from the web map: remove any left from older runs.
     for sub in ("tiles", "thumbs"):
         shutil.rmtree(zone_dir / sub, ignore_errors=True)
-        (zone_dir / sub).mkdir(parents=True)
 
-    entries = []
-    for visit in maps:
-        x, y = visit.coords
-        stem = f"{x}_{y}"
-        image = to_pil(visit.image)
-        image.save(zone_dir / "tiles" / f"{stem}.webp", quality=quality)
-        w, h = image.size
-        thumb = image.resize((THUMB_WIDTH, max(1, round(h * THUMB_WIDTH / w))),
-                             Image.Resampling.LANCZOS)
-        thumb.save(zone_dir / "thumbs" / f"{stem}.png")
-        entries.append({
-            "x": x,
-            "y": y,
-            "tile": f"tiles/{stem}.webp",
-            "thumb": f"thumbs/{stem}.png",
-            "source": visit.source,
-            "confidence": round(visit.confidence, 3),
-            "video_time": round(visit.video_time, 2),
-        })
+    entries = [{
+        "x": visit.coords[0],
+        "y": visit.coords[1],
+        "source": visit.source,
+        "confidence": round(visit.confidence, 3),
+        "video_time": round(visit.video_time, 2),
+    } for visit in maps]
 
+    # The game area's size gives the plan tiles their shape.
     tile_size = [0, 0]
     if maps:
         h, w = maps[0].image.shape[:2]

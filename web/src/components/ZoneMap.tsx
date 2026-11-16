@@ -1,8 +1,8 @@
 import L from "leaflet";
 import { memo, useEffect, useMemo } from "react";
-import { Circle, ImageOverlay, MapContainer, Marker, Pane, Rectangle, Tooltip, useMap, useMapEvent } from "react-leaflet";
+import { Circle, MapContainer, Marker, Pane, Rectangle, Tooltip, useMap, useMapEvent } from "react-leaflet";
 import { corridorBounds, TILE_HEIGHT, tileBounds, tileCenter, tileWidth, zoneBounds, type Bounds } from "../data/geometry";
-import { dataUrl, mapKey, zoneLinks, type MapEntry, type Zone } from "../data/zones";
+import { mapKey, zoneLinks, type MapEntry, type Zone } from "../data/zones";
 import type { CheckedSet } from "../progress/progressStore";
 
 const STYLE_UNCHECKED: L.PathOptions = {
@@ -12,14 +12,12 @@ const STYLE_INFERRED: L.PathOptions = { ...STYLE_UNCHECKED, color: "#f0a030", op
 const STYLE_CHECKED: L.PathOptions = {
   color: "#5fd35f", weight: 3, opacity: 1, fillColor: "#2f8f2f", fillOpacity: 0.5,
 };
-// Plan view: drawn tiles, like the mock zones.
+// Drawn tiles, like the mock zones.
 const PLAN_TILE: L.PathOptions = { stroke: false, fillColor: "#2b241b", fillOpacity: 1, interactive: false };
 const PLAN_CORRIDOR: L.PathOptions = { stroke: false, fillColor: "#6b5a40", fillOpacity: 1, interactive: false };
 const PLAN_NODE: L.PathOptions = { stroke: false, fillColor: "#8a7452", fillOpacity: 1, interactive: false };
 /** Coordinate labels are hidden when tiles get smaller than this on screen. */
 const LABEL_MIN_TILE_PX = 44;
-
-export type MapView = "plan" | "photos";
 
 const STYLE_CURRENT: L.PathOptions = {
   color: "#4fc3ff", weight: 5, opacity: 1, fill: false, interactive: false, className: "current-map",
@@ -31,54 +29,42 @@ interface Props {
   onToggle: (key: string) => void;
   /** Map the player is on (live capture), highlighted and kept in view. */
   current?: string | null;
-  view: MapView;
-  onViewChange: (view: MapView) => void;
 }
 
-export function ZoneMap({ zone, checked, onToggle, current, view, onViewChange }: Props) {
+export function ZoneMap({ zone, checked, onToggle, current }: Props) {
   const bounds = useMemo(() => zoneBounds(zone.maps, zone.tile_size), [zone]);
   return (
-    <>
-      <MapContainer
-        key={zone.zone}
-        className="map"
-        crs={L.CRS.Simple}
-        bounds={bounds}
-        boundsOptions={{ padding: [24, 24] }}
-        minZoom={-4}
-        maxZoom={3}
-        zoomSnap={0.25}
-        zoomDelta={0.5}
-        wheelPxPerZoomLevel={120}
-        // Quick taps on neighbouring maps would otherwise zoom in.
-        doubleClickZoom={false}
-        attributionControl={false}
-      >
-        <FitOnResize bounds={bounds} />
-        {view === "plan" && <PlanLayer zone={zone} />}
-        {zone.maps.map((entry) => {
-          const key = mapKey(entry.x, entry.y);
-          return (
-            <MapTile
-              key={key}
-              zone={zone}
-              entry={entry}
-              checked={checked.has(key)}
-              onToggle={onToggle}
-              photo={view === "photos"}
-            />
-          );
-        })}
-        {current && <CurrentMap key={current} zone={zone} current={current} />}
-      </MapContainer>
-      <div className="view-toggle" role="group" aria-label="Affichage">
-        {(["plan", "photos"] as const).map((v) => (
-          <button key={v} type="button" aria-pressed={view === v} onClick={() => onViewChange(v)}>
-            {v === "plan" ? "Plan" : "Photos"}
-          </button>
-        ))}
-      </div>
-    </>
+    <MapContainer
+      key={zone.zone}
+      className="map"
+      crs={L.CRS.Simple}
+      bounds={bounds}
+      boundsOptions={{ padding: [24, 24] }}
+      minZoom={-4}
+      maxZoom={3}
+      zoomSnap={0.25}
+      zoomDelta={0.5}
+      wheelPxPerZoomLevel={120}
+      // Quick taps on neighbouring maps would otherwise zoom in.
+      doubleClickZoom={false}
+      attributionControl={false}
+    >
+      <FitOnResize bounds={bounds} />
+      <PlanLayer zone={zone} />
+      {zone.maps.map((entry) => {
+        const key = mapKey(entry.x, entry.y);
+        return (
+          <MapTile
+            key={key}
+            zone={zone}
+            entry={entry}
+            checked={checked.has(key)}
+            onToggle={onToggle}
+          />
+        );
+      })}
+      {current && <CurrentMap key={current} zone={zone} current={current} />}
+    </MapContainer>
   );
 }
 
@@ -95,8 +81,8 @@ const PlanLayer = memo(function PlanLayer({ zone }: { zone: Zone }) {
       })),
     [zone, size],
   );
-  // Own pane under the overlay pane: toggled back on, the plan must still
-  // sit below the clickable tiles and their checked colour.
+  // Own pane under the overlay pane, so the plan always sits below the
+  // clickable tiles and their checked colour.
   return (
     <Pane name="plan" style={{ zIndex: 350 }}>
       {zone.maps.map((m) => (
@@ -172,10 +158,9 @@ interface TileProps {
   entry: MapEntry;
   checked: boolean;
   onToggle: (key: string) => void;
-  photo: boolean;
 }
 
-const MapTile = memo(function MapTile({ zone, entry, checked, onToggle, photo }: TileProps) {
+const MapTile = memo(function MapTile({ zone, entry, checked, onToggle }: TileProps) {
   const bounds = useMemo(() => tileBounds(entry.x, entry.y, zone.tile_size), [entry, zone.tile_size]);
   const handlers = useMemo(
     () => ({ click: () => onToggle(mapKey(entry.x, entry.y)) }),
@@ -183,15 +168,12 @@ const MapTile = memo(function MapTile({ zone, entry, checked, onToggle, photo }:
   );
   const style = checked ? STYLE_CHECKED : entry.source === "inferred" ? STYLE_INFERRED : STYLE_UNCHECKED;
   return (
-    <>
-      {photo && <ImageOverlay url={dataUrl(`${zone.zone}/${entry.tile}`)} bounds={bounds} />}
-      <Rectangle bounds={bounds} pathOptions={style} eventHandlers={handlers}>
-        <Tooltip direction="top" offset={[0, -8]}>
-          <strong>[{entry.x},{entry.y}]</strong>
-          {checked ? " · vérifiée" : ""}
-          {entry.source === "inferred" ? <div className="tooltip-note">Position estimée</div> : null}
-        </Tooltip>
-      </Rectangle>
-    </>
+    <Rectangle bounds={bounds} pathOptions={style} eventHandlers={handlers}>
+      <Tooltip direction="top" offset={[0, -8]}>
+        <strong>[{entry.x},{entry.y}]</strong>
+        {checked ? " · vérifiée" : ""}
+        {entry.source === "inferred" ? <div className="tooltip-note">Position estimée</div> : null}
+      </Tooltip>
+    </Rectangle>
   );
 });

@@ -61,13 +61,28 @@ uv run python -m archimap.mock          # mock-grotte, mock-souterrain, mock-don
 uv run python -m archimap.mock --clean  # removes only the mock-* zones
 ```
 
-The map opens as a **plan**: one drawn tile per map, with corridors for the passages walked in the recording (saved as `links` in `zone.json`). **Photos** switches to the captured screenshots.
+The map is a **plan**: one drawn tile per map, with corridors for the passages walked in the recording (saved as `links` in `zone.json`).
 
 Click or tap a map to mark it checked. Hover (desktop) or tap (mobile) shows its coordinates. Progress is saved in the browser per zone, and **Nouvelle chasse** clears it. The selected zone is kept in the URL (`#zone-slug`), so you can link to it.
 
+### Zones from the game client
+
+Zones can also be built without a video, from the map data the Dofus Retro client caches on your computer (start the game once). Each zone is defined in `zones/<zone>.json`:
+
+```json
+{ "client_subarea": 75, "name": "Égouts de Brâkmar", "add_links": [], "remove_links": [] }
+```
+
+```sh
+uv run python -m archimap.client_zones list Egout   # find sub-area ids
+uv run python -m archimap.client_zones import       # (re)build every zone with a "client_subarea"
+```
+
+The client data has no passages, so every pair of neighbouring maps is joined: list walls in `remove_links`. For a zone that also has a recording, the recorded maps and walked passages are kept and only the maps the recording missed are added. Sub-areas where many maps share the same coordinates (Souterrain d'Amakna, Grotte Hesque…) can't be used: Archimap tells maps apart by their coordinates.
+
 ### Fixing passages on the plan
 
-Corridors on the plan are the passages walked in the recording (two maps visited one right after the other). Passages you didn't walk are missing, and two neighbouring maps aren't always connected. Fix them in `zones/<zone>.json`:
+Corridors on the plan are the passages walked in the recording (two maps visited one right after the other). Passages you didn't walk are missing, and two neighbouring maps aren't always connected. Fix them in `zones/<zone>.json` (the same file can also define a client zone, see above):
 
 ```json
 {

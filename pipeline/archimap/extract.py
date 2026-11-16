@@ -6,11 +6,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 import cv2
 
+from .client_zones import build_zone, find_client_data, load_client_data
 from .corrections import apply_link_corrections, corrections_path
 from .dedupe import dedupe
 from .export import export_zone, update_zone_index
@@ -196,7 +198,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {note}")
     zone_json = export_zone(maps, args.zone, name, args.video.name, data_dir,
                             links=links)
-    update_zone_index(data_dir, args.zone, name, len(maps))
+    count = len(maps)
+    config_path = corrections_path(root, args.zone)
+    config = json.loads(config_path.read_text()) if config_path.is_file() else {}
+    if "client_subarea" in config:
+        # Keep the maps the recording missed, from the game client's data.
+        client = find_client_data()
+        if client is None:
+            print("  warning: game client data not found, maps missing from the recording are not added")
+        else:
+            zone, notes = build_zone(args.zone, config, load_client_data(client),
+                                     json.loads(zone_json.read_text()), config_path)
+            zone_json.write_text(json.dumps(zone, indent=2, ensure_ascii=False) + "\n")
+            name, count = zone["name"], len(zone["maps"])
+            print(f"  client data: {'; '.join(notes)}")
+    update_zone_index(data_dir, args.zone, name, count)
     report = write_report(visits, maps, args.zone, args.video.name, out_root / args.zone,
                           variants[0])
 

@@ -11,7 +11,7 @@ def test_write_and_clean_keep_real_zones(tmp_path):
     assert {z["zone"] for z in index} == {"real", *ZONES}
     for slug in ZONES:
         zone = json.loads((tmp_path / slug / "zone.json").read_text())
-        assert all((tmp_path / slug / m["tile"]).is_file() for m in zone["maps"])
+        assert zone["maps"] and zone["links"]
 
     clean_mock_zones(tmp_path)
     index = json.loads((tmp_path / "zones.json").read_text())["zones"]

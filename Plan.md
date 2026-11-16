@@ -18,9 +18,7 @@ Input: a screen recording (mp4/mkv/webm) of the character exploring a zone.
 4. **Fallback when OCR fails:** infer the position from the previous map plus the exit direction (the side of the screen the character left from), and flag it as `"source": "inferred"` for manual review.
 5. **Deduplicate** maps that were visited several times (same coordinates → keep the best frame).
 6. **Export:**
-   - `web/public/data/<zone-slug>/tiles/<x>_<y>.webp`: the cropped game view, compressed
    - `web/public/data/<zone-slug>/zone.json`: see the schema below
-   - `web/public/data/<zone-slug>/thumbs/`: small images used for live-mode matching (phase 3)
 
 The pipeline must be a CLI, for example: `python -m archimap.extract video.mp4 --zone "zone-slug" [--coords-box x,y,w,h] [--fps 6]` It should also write a debug report (an HTML or contact sheet of the detected maps and the OCR'd coordinates) so results can be reviewed quickly.
 
@@ -37,7 +35,6 @@ The pipeline must be a CLI, for example: `python -m archimap.extract video.mp4 -
 
 - The **Screen Capture API** (`getDisplayMedia`) captures the Dofus window, chosen by the user.
 - A few times per second, crop the coordinates area and read it with **Tesseract.js**. On a stable reading (same value for N frames), mark that map **checked** and highlight it as the **current position**.
-- Fallback: **image matching** of the downscaled frame against `thumbs/` (perceptual hash or small-image correlation), restricted to the current map's neighbours.
 - Settings panel: coordinates crop box (with a visual picker on the captured frame), confidence threshold, pause/resume.
 - Everything runs locally in the browser. No video is uploaded anywhere.
 
@@ -53,18 +50,18 @@ The pipeline must be a CLI, for example: `python -m archimap.extract video.mp4 -
 {
   "zone": "zone-slug",
   "name": "Human-readable zone name",
-  "source_video": "file name",
+  "source_video": "file name" | null,
   "tile_size": [w, h],
   "maps": [
     {
       "x": -5, "y": 12,
-      "tile": "tiles/-5_12.webp",
-      "thumb": "thumbs/-5_12.png",
-      "source": "ocr" | "inferred" | "manual",
+      "source": "ocr" | "inferred" | "manual" | "client",
       "confidence": 0.0,
       "video_time": 12.4
     }
-  ]
+  ],
+  "links": [[x1, y1, x2, y2]],
+  "client_subarea": 73
 }
 
 ```
@@ -132,6 +129,7 @@ archimap/
   - Phase 3 must port the same steps to the browser: game-area borders, label search, size normalization, two binarizations with voting, and the adjacency check (the current position must be next to the previous one).
 - Phase 3 live capture built (`web/src/live/`): `getDisplayMedia` window capture, layout detection ported from the pipeline (game-area borders over distinct frames, "Coordonnées" label search with Tesseract.js, size-normalized bicubic resize, two binarizations), about 2 reads per second, and `PositionTracker` (3 identical reads to confirm a move to an adjacent map, twice that for a non-adjacent jump). When the two readings disagree, it prefers the one adjacent to the current map, then one that is a map of the zone.
   - Verified end to end by feeding the recorded clip as the capture stream (Playwright): 12/12 maps of the first 50 s checked in route order at 960x540, 1280x720, 1920x1080 and 2560x1440, with no false positives.
-  - Not built yet: the manual box picker and the thumbnail image-matching fallback. OCR plus automatic detection covers the tested setups.
+  - Not built yet: the manual box picker. OCR plus automatic detection covers the tested setups.
 - Pipeline speed: about 80 s for a 10-minute 1080p video (was ~14 min). Starting a Tesseract process per crop dominated, so OCR now runs after decoding in a few large batches (`read_coords_many`: list file, one process per batch, batches in parallel), and layout detection reads only keyframes.
-- Plan view (default): the web app draws each map as a schematic tile (room, corridors, coordinates) instead of the screenshot, so tooltips and overlays in the captures no longer matter. Corridors come from `links` in `zone.json`, which are the passages the player walked (consecutive adjacent visits); data without `links` falls back to joining neighbouring maps. **Photos** shows the screenshots. A median-of-frames tile composite was tried (it removed tooltips well) but was dropped in favour of the plan.
+- Zones from the game client (`archimap.client_zones`): the Dofus Retro client caches its map data as Flash shared objects (`ANKXTRASO_*_MA.sol`: map → x, y, sub-area; sub-area and area names), read with `archimap/sol.py`. `zones/<zone>.json` sets the sub-area, display name and passage corrections. Checked against the recording: all 80 recorded Égouts de Bonta maps are in sub-area 73, which adds 2 maps the recording missed. Imported so far: Égouts de Bonta and Brâkmar, Caverne des Fungus, Souterrain du Château d'Amakna, Souterrain d'Astrub, Souterrain profond d'Astrub. Left out because many maps share coordinates: Souterrain (Amakna) 73 maps on 12 cells, Souterrain mystérieux 19 on 7, Grotte Hesque 10 on 1. The client data has no passages (map files are encrypted), so client maps are joined to all their neighbours.
+- Plan view (default): the web app draws each map as a schematic tile (room, corridors, coordinates) instead of the screenshot, so tooltips and overlays in the captures no longer matter. Corridors come from `links` in `zone.json`, which are the passages the player walked (consecutive adjacent visits); data without `links` falls back to joining neighbouring maps. A median-of-frames tile composite was tried (it removed tooltips well) but was dropped in favour of the plan. Screenshots (`tiles/`, `thumbs/`) and the Photos view were then removed entirely: the plan is the only view, and zone data is just `zone.json`.

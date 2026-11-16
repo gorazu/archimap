@@ -6,22 +6,22 @@ export interface ZoneSummary {
   maps: number;
 }
 
-export type MapSource = "ocr" | "inferred" | "manual";
+/** "client": from the game client's map data rather than a recording. */
+export type MapSource = "ocr" | "inferred" | "manual" | "client";
 
 export interface MapEntry {
   x: number;
   y: number;
-  tile: string;
-  thumb: string;
   source: MapSource;
-  confidence: number;
-  video_time: number;
+  confidence?: number;
+  video_time?: number;
 }
 
 export interface Zone {
   zone: string;
   name: string;
-  source_video: string;
+  source_video: string | null;
+  /** Game-area size of the recording: gives the plan tiles their shape. */
   tile_size: [number, number];
   maps: MapEntry[];
   /** Passages between maps as [x1, y1, x2, y2], from the recorded route. Missing in older data. */

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "./components/Header";
 import { LivePanel } from "./components/LivePanel";
-import { ZoneMap, type MapView } from "./components/ZoneMap";
+import { ZoneMap } from "./components/ZoneMap";
 import { fetchZone, fetchZoneIndex, mapKey, type Zone, type ZoneSummary } from "./data/zones";
 import type { Coords } from "./live/ocr";
 import { isLiveCaptureSupported } from "./live/session";
@@ -11,15 +11,6 @@ import { useProgress } from "./progress/useProgress";
 const LIVE_SUPPORTED = isLiveCaptureSupported();
 
 const LAST_ZONE_KEY = "archimap:last-zone";
-const VIEW_KEY = "archimap:view";
-
-function initialView(): MapView {
-  try {
-    return localStorage.getItem(VIEW_KEY) === "photos" ? "photos" : "plan";
-  } catch {
-    return "plan";
-  }
-}
 
 function rememberZone(slug: string) {
   try {
@@ -48,15 +39,6 @@ export function App() {
   const [slug, setSlug] = useState<string | null>(null);
   const [zone, setZone] = useState<Zone | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<MapView>(initialView);
-  const changeView = useCallback((v: MapView) => {
-    setView(v);
-    try {
-      localStorage.setItem(VIEW_KEY, v);
-    } catch {
-      // Not important if it can't be stored.
-    }
-  }, []);
 
   useEffect(() => {
     fetchZoneIndex()
@@ -150,14 +132,7 @@ export function App() {
             </p>
           </div>
         ) : zone ? (
-          <ZoneMap
-            zone={zone}
-            checked={checked}
-            onToggle={toggle}
-            current={current}
-            view={view}
-            onViewChange={changeView}
-          />
+          <ZoneMap zone={zone} checked={checked} onToggle={toggle} current={current} />
         ) : null}
         {liveOpen && zone && <LivePanel live={live} zoneMaps={zoneMaps} onClose={() => setLiveOpen(false)} />}
       </main>
