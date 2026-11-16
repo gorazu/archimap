@@ -11,6 +11,7 @@ from pathlib import Path
 
 import cv2
 
+from .corrections import apply_link_corrections, corrections_path
 from .dedupe import dedupe
 from .export import export_zone, update_zone_index
 from .frames import grab_frame, iter_frames, iter_keyframes, probe
@@ -189,8 +190,12 @@ def main(argv: list[str] | None = None) -> int:
 
     data_dir = args.data_dir or root / "web" / "public" / "data"
     name = args.name or args.zone
+    links, notes = apply_link_corrections(route_links(visits), corrections_path(root, args.zone),
+                                          {m.coords for m in maps})
+    for note in notes:
+        print(f"  {note}")
     zone_json = export_zone(maps, args.zone, name, args.video.name, data_dir,
-                            links=route_links(visits))
+                            links=links)
     update_zone_index(data_dir, args.zone, name, len(maps))
     report = write_report(visits, maps, args.zone, args.video.name, out_root / args.zone,
                           variants[0])

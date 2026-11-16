@@ -65,6 +65,19 @@ The map opens as a **plan**: one drawn tile per map, with corridors for the pass
 
 Click or tap a map to mark it checked. Hover (desktop) or tap (mobile) shows its coordinates. Progress is saved in the browser per zone, and **Nouvelle chasse** clears it. The selected zone is kept in the URL (`#zone-slug`), so you can link to it.
 
+### Fixing passages on the plan
+
+Corridors on the plan are the passages walked in the recording (two maps visited one right after the other). Passages you didn't walk are missing, and two neighbouring maps aren't always connected. Fix them in `zones/<zone>.json`:
+
+```json
+{
+  "add_links": [[-33, -58, -32, -58]],
+  "remove_links": []
+}
+```
+
+The pipeline applies this file on every run. To apply it right away without reprocessing the video, run `uv run python -m archimap.corrections <zone>` from `pipeline/`, then commit `zones/` and the zone data.
+
 ### Deployment
 
 The site is deployed on Vercel from GitHub: the Vercel project imports `gorazu/archimap` with **Root Directory** set to `web`, and `web/vercel.json` sets the Bun install, the Vite build and the `dist` output. Every push to `main` redeploys; commit regenerated zone data in `web/public/data/` to publish it.
