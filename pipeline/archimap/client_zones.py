@@ -31,7 +31,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .client_maps import Passage, find_entrances, find_maps_dir, read_layouts, sun_on_side, sun_passages
+from .client_maps import Entrance, Passage, find_entrances, find_maps_dir, main_maps, read_layouts, sun_on_side, sun_passages
 from .corrections import apply_link_corrections
 from .export import update_zone_index
 from .sol import read_sol
@@ -166,6 +166,12 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
     cells = set(by_coords)
     name = config.get("name") or client.subareas[subareas[0]][0]
     notes = []
+    shared = None
+    if maps_dir:
+        # Several maps can share coordinates: one is drawn ("main_maps" picks it by hand).
+        chosen = {tuple(map(int, k.split(","))): v for k, v in config.get("main_maps", {}).items()}
+        shared = main_maps(by_coords, maps_dir, chosen)
+        by_coords = shared.maps
     areas, passages, unreadable = sun_passages(by_coords, maps_dir) if maps_dir else ({}, [], cells)
     layouts = read_layouts(by_coords, maps_dir) if maps_dir else {}
     passages += added_passages(config, areas)
@@ -201,12 +207,16 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
             m["subarea"] = subarea_of[(m["x"], m["y"])]
         if areas.get((m["x"], m["y"])):
             m["areas"] = [list(a.center) for a in areas[(m["x"], m["y"])]]
-            # Walking routes between the map's suns, over its floor.
-            m["paths"] = [[list(p) for p in route] for a in areas[(m["x"], m["y"])] for route in a.paths]
+            # Walking routes between the map's suns, over its floor (the main map's: the one drawn).
+            drawn = areas[(m["x"], m["y"])][:shared.main_areas.get((m["x"], m["y"])) if shared else None]
+            m["paths"] = [[list(p) for p in route] for a in drawn for route in a.paths]
         # The map's own layout (floor, walls, suns), drawn inside its plan tile.
         if (m["x"], m["y"]) in layouts:
             m["layout"] = layouts[(m["x"], m["y"])]
-    zone["entrances"] = zone_entrances(find_entrances(areas, passages), config, client, subareas)
+    # A left-out room with a ladder is a way in when a map lies above it (another sub-area there).
+    above = {coords for sid, maps in client.maps.items() if sid not in subareas for _, coords in maps}
+    rooms = [Entrance(xy, 0, None, "ladder", xy) for xy in (shared.rooms if shared else []) if xy in areas and xy in above]
+    zone["entrances"] = zone_entrances(find_entrances(areas, passages) + rooms, config, client, subareas)
     zone["passages"] = [{"a": [*p.a[0], p.a[1]], "b": [*p.b[0], p.b[1]], "t": p.t,
                          **({"ua": list(p.ua)} if p.ua else {}), **({"ub": list(p.ub)} if p.ub else {}),
                          **({"oneway": p.oneway} if p.oneway else {})}

@@ -1,7 +1,7 @@
 import struct
 import zlib
 
-from archimap.client_maps import (Area, Exit, find_entrances, map_areas, map_layout, passages_between, plain_map_file,
+from archimap.client_maps import (Area, Exit, find_entrances, main_maps, map_areas, map_layout, passages_between, plain_map_file,
                                   read_cells, sun_links, swf_variables)
 
 HASH = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
@@ -203,3 +203,18 @@ def test_a_sun_into_a_split_map_leads_to_one_part_only():
                       Area((0.2, 0.8), [Exit("left", 0.8, uv=(0.04, 0.8))])]}
     ways = sorted((p.b[1], p.oneway) for p in passages_between(areas))
     assert ways == [(0, None), (1, "ba")]  # the bottom part can be left, not entered
+
+
+def test_one_main_map_per_coordinates(tmp_path):
+    # (0,0) holds a small version (7x9) and a usual one of the same map, and a room
+    # with only a ladder; (1,0) is its right neighbour, with a sun back.
+    (tmp_path / "1_0001.swf").write_bytes(map_swf(map_data({(12, 8): cell(SUN)}, 7, 9), 7, 9))
+    (tmp_path / "2_0001.swf").write_bytes(map_swf(map_data({(28, 16): cell(SUN)})))
+    room = {(x, y): cell(WALL) for x in range(29) for y in range(33) if (x + y) % 2 == 0}
+    room.update({(x, y): cell() for x in range(10, 19) for y in range(12, 21) if (x + y) % 2 == 0})
+    room[(14, 16)] = cell(SUN)
+    (tmp_path / "3_0001.swf").write_bytes(map_swf(map_data(room, default=WALL)))
+    (tmp_path / "4_0001.swf").write_bytes(map_swf(map_data({(0, 16): cell(SUN)})))
+    shared = main_maps({(0, 0): [1, 2, 3], (1, 0): [4]}, tmp_path)
+    assert shared.maps == {(0, 0): [2], (1, 0): [4]}  # the usual size; the small one adds nothing
+    assert shared.rooms == [(0, 0)]

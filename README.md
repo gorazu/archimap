@@ -39,6 +39,7 @@ This writes `web/public/data/<zone>/zone.json` and adds the zone to `web/public/
 What comes from the client:
 
 - **Maps:** every map of the sub-area, by coordinates. Sub-areas where many maps share the same coordinates (Souterrain d'Amakna, Grotte Hesque, Village des Dragoeufs…) can't be used: Archimap tells maps apart by their coordinates, and the plan would show far fewer tiles than the zone has maps.
+- **Maps sharing coordinates:** a few coordinates hold several game maps (versions of the same map, or a small room with a ladder from the surface). One is drawn: the one whose suns best match its neighbours'. Another is kept for linking only if it reaches a neighbour the drawn one doesn't, and a ladder room under a surface map becomes an entrance. `"main_maps": {"-22,32": 6744}` in the zone's file picks the drawn map by hand.
 - **Passages:** from the **suns** in each map's file. A sun on a map's edge is a passage to the neighbouring map on that side, when that map has an exit back; ladders and doors inside closed rooms count too. On Égouts de Bonta, this finds every passage walked in a recording.
 - **Layouts and paths:** each map's floor, walls and suns, and the walking routes between its suns. Some maps are split into separate parts, each with its own suns (the Forêt maléfique is a labyrinth); each part and each path is drawn separately.
 

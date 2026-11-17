@@ -303,6 +303,57 @@ def map_areas(variables: dict[str, object]) -> list[Area]:
     return areas
 
 
+@dataclass
+class SharedCoords:
+    """Which maps to use where several share coordinates."""
+    maps: dict[Coords, list[int]]  # the main map first, then others that reach another neighbour
+    main_areas: dict[Coords, int]  # how many of the areas read come from the main map (drawn)
+    rooms: list[Coords]  # left-out rooms with a ladder only: ways in from above
+
+
+def main_maps(maps: dict[Coords, list[int]], maps_dir: Path, chosen: dict[Coords, int] | None = None) -> SharedCoords:
+    """Several maps can share coordinates: versions of the same map, a small
+    room with a ladder from the surface, or a map reaching other neighbours.
+    The main one, drawn, is the one whose suns best match the neighbouring
+    maps' (a sun facing a neighbour with a sun back), then of the usual
+    size, then the lowest id; `chosen` picks it by hand. Others are kept for
+    their passages only when they reach a neighbour the main one doesn't;
+    rooms with only a ladder become ways in."""
+    files = {i: plain_map_file(maps_dir, i) for ids in maps.values() for i in ids}
+    variables = {i: swf_variables(f) for i, f in files.items() if f}
+    areas_of = {i: map_areas(v) for i, v in variables.items()}
+    exits = {i: [e for a in areas_of[i] for e in a.exits] for i in variables}
+    sides_at = {xy: {e.side for i in ids if i in exits for e in exits[i] if not e.inner} for xy, ids in maps.items()}
+    sizes = collections.Counter((v["width"], v["height"]) for v in variables.values())
+    usual = sizes.most_common(1)[0][0] if sizes else None
+
+    def reaches(xy: Coords, i: int) -> set[str]:
+        """Sides on which the map has a sun facing a neighbour with a sun back."""
+        return {e.side for e in exits[i] if not e.inner
+                and OPPOSITE[e.side] in sides_at.get((xy[0] + SIDES[e.side][0], xy[1] + SIDES[e.side][1]), set())}
+
+    shared = SharedCoords({}, {}, [])
+    for xy, ids in maps.items():
+        readable = [i for i in ids if i in variables]
+        if len(readable) <= 1 and not (chosen and xy in chosen):
+            shared.maps[xy] = ids
+            continue
+        main = chosen[xy] if chosen and xy in chosen else min(
+            readable, key=lambda i: (-len(reaches(xy, i)), (variables[i]["width"], variables[i]["height"]) != usual, i))
+        kept, covered = [main], reaches(xy, main)
+        for i in readable:
+            if i == main:
+                continue
+            if exits[i] and all(e.inner for e in exits[i]):
+                shared.rooms.append(xy)
+            elif reaches(xy, i) - covered:
+                kept.append(i)
+                covered |= reaches(xy, i)
+        shared.maps[xy] = kept
+        shared.main_areas[xy] = len(areas_of[main])
+    return shared
+
+
 def read_areas(maps: dict[Coords, list[int]], maps_dir: Path) -> tuple[dict[Coords, list[Area]], set[Coords]]:
     """Areas of every map (several map ids on one cell are pooled); also the
     maps that had no readable map file."""

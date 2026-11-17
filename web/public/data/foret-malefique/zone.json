@@ -1467,39 +1467,9 @@
         [
           0.503,
           0.496
-        ],
-        [
-          0.503,
-          0.497
         ]
       ],
       "paths": [
-        [
-          [
-            0.5,
-            0.5
-          ],
-          [
-            0.429,
-            0.562
-          ],
-          [
-            0.393,
-            0.594
-          ],
-          [
-            0.393,
-            0.719
-          ],
-          [
-            0.393,
-            0.844
-          ],
-          [
-            0.393,
-            0.969
-          ]
-        ],
         [
           [
             0.5,
@@ -2897,10 +2867,6 @@
       "source": "client",
       "areas": [
         [
-          0.456,
-          0.519
-        ],
-        [
           0.15,
           0.131
         ],
@@ -2910,28 +2876,6 @@
         ]
       ],
       "paths": [
-        [
-          [
-            0.458,
-            0.536
-          ],
-          [
-            0.542,
-            0.464
-          ],
-          [
-            0.625,
-            0.393
-          ],
-          [
-            0.708,
-            0.321
-          ],
-          [
-            0.792,
-            0.25
-          ]
-        ],
         [
           [
             0.25,
@@ -2982,9 +2926,9 @@
         ]
       ],
       "layout": {
-        "w": 13,
-        "h": 15,
-        "cells": "VVVVVVVVVVVVVVVVVVVVVpqVVpqaVlqqelqqqlqqqWqqqaqqqqqqqqpqqqpqqqmqqqqqqqaqqqaqqqapqqalqqqVqqqVpqqWlqqWVaaWVZZVVVVVVVVVVVVVV"
+        "w": 15,
+        "h": 17,
+        "cells": "VVVVVlbVVVpWVVVqVVVlaVVVpWlVVpVpVVbVaVVWlqVlVpqVVVqqVVVqaVVlqqVVpqqVVpqaVlqqaVpqqaVpqqaVpqqaVpqqaVqqqWVqqqXVqqmVVqqlVVqaVVVqaVVVqWVVVqVVVlaVVVpWVVVqVVVlbVVVVVVF"
       }
     },
     {
@@ -8371,28 +8315,6 @@
     {
       "a": [
         -7,
-        16,
-        1
-      ],
-      "b": [
-        -7,
-        17,
-        0
-      ],
-      "t": 0.428,
-      "ua": [
-        0.393,
-        0.969
-      ],
-      "ub": [
-        0.464,
-        0.031
-      ],
-      "oneway": "ab"
-    },
-    {
-      "a": [
-        -7,
         17,
         0
       ],
@@ -9743,7 +9665,7 @@
       "b": [
         -2,
         17,
-        1
+        0
       ],
       "t": 0.281,
       "ua": [
@@ -9976,28 +9898,6 @@
         17,
         0
       ],
-      "t": 0.556,
-      "ua": [
-        0.321,
-        0.969
-      ],
-      "ub": [
-        0.792,
-        0.25
-      ],
-      "oneway": "ba"
-    },
-    {
-      "a": [
-        -2,
-        16,
-        1
-      ],
-      "b": [
-        -2,
-        17,
-        1
-      ],
       "t": 0.285,
       "ua": [
         0.321,
@@ -10012,7 +9912,7 @@
       "a": [
         -2,
         17,
-        2
+        1
       ],
       "b": [
         -1,
@@ -10033,7 +9933,7 @@
       "a": [
         -2,
         17,
-        2
+        1
       ],
       "b": [
         -2,
