@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { binarize, OCR_HEIGHT, parseCoords, readingValue, tally } from "./ocr";
+import { binarize, OCR_HEIGHT, parseCoords, readingValue, repairReading, tally } from "./ocr";
 
 test("parse coordinates", () => {
   expect(parseCoords("-26,-57")).toEqual([-26, -57]);
@@ -43,4 +43,22 @@ test("binarize gives dark text on white at the OCR height", () => {
   const thick = binarize({ width: w, height: h, data }, 160, 3);
   const darkCount = (img: typeof out) => img.data.filter((v, i) => i % 4 === 0 && v === 0).length;
   expect(darkCount(thick)).toBeGreaterThan(darkCount(out));
+});
+
+
+test("readings one OCR slip away from a map next to the player are repaired", () => {
+  const forest = new Set(["-5,17", "-5,18", "-5,19", "-6,18", "-7,17", "-7,18"]);
+  // A light ray read as a 1 (Forêt maléfique [-5,18]).
+  expect(repairReading([-5, 118], [-5, 17], forest)).toEqual([-5, 18]);
+  // The minus sign lost ([-7,17]).
+  expect(repairReading([7, 17], [-7, 18], forest)).toEqual([-7, 17]);
+  // Already a map of the zones, or next to the player: as read.
+  expect(repairReading([-5, 19], [-5, 18], forest)).toEqual([-5, 19]);
+  expect(repairReading([7, 17], [7, 18], forest)).toEqual([7, 17]); // on the surface, next to the player
+  // Far from the player, or no position yet: as read.
+  expect(repairReading([-5, 118], [-20, 30], forest)).toEqual([-5, 118]);
+  expect(repairReading([-5, 118], null, forest)).toEqual([-5, 118]);
+  // Applied to a capture's readings.
+  expect(readingValue([[-5, 118], [-5, 18]], [-5, 17], forest)).toEqual([-5, 18]);
+  expect(readingValue([[7, 17], [7, 17]], [-7, 18], forest)).toEqual([-7, 17]);
 });

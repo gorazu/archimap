@@ -95,6 +95,38 @@ export function tally(readings: (Coords | null)[]): { coords: Coords; share: num
     .map(({ coords, n }) => ({ coords, share: n / readings.length }));
 }
 
+/** Readings one OCR slip away: a digit too many (a light ray read as a 1), or a minus sign lost or added. */
+function slips([x, y]: Coords): Coords[] {
+  const variants = (n: number) => {
+    const digits = String(Math.abs(n));
+    const sign = n < 0 ? -1 : 1;
+    const out = [-n];
+    for (let i = 0; i < digits.length && digits.length > 1; i++) {
+      out.push(sign * Number(digits.slice(0, i) + digits.slice(i + 1)));
+    }
+    return out;
+  };
+  return [...variants(x).map((v): Coords => [v, y]), ...variants(y).map((v): Coords => [x, v])];
+}
+
+/**
+ * Repair a reading that is no map of the zones but one OCR slip away from
+ * the current map or a map next to it ("-5,118" for -5,18, "7,17" for
+ * -7,17). Only then: a reading next to the current position is taken as
+ * read, and off the zones (on the surface) any coordinates are possible.
+ */
+export function repairReading(reading: Coords, current: Coords | null, zoneMaps: ReadonlySet<string>): Coords {
+  if (!current || zoneMaps.has(coordsKey(reading))) return reading;
+  if (coordsKey(reading) === coordsKey(current) || isAdjacent(reading, current)) return reading;
+  const near = new Map(
+    slips(reading)
+      .filter((c) => zoneMaps.has(coordsKey(c)) && (coordsKey(c) === coordsKey(current) || isAdjacent(c, current)))
+      .map((c) => [coordsKey(c), c]),
+  );
+  // Only when there's no doubt about which.
+  return near.size === 1 ? [...near.values()][0] : reading;
+}
+
 /**
  * The value read from one capture (one reading per binarization). When the
  * readings disagree, prefer the one next to the current position (walking
@@ -106,7 +138,7 @@ export function readingValue(
   current: Coords | null,
   zoneMaps: ReadonlySet<string> = new Set(),
 ): Coords | null {
-  const candidates = tally(readings);
+  const candidates = tally(readings.map((r) => r && repairReading(r, current, zoneMaps)));
   if (candidates.length === 0) return null;
   if (candidates.length === 1) return candidates[0].coords;
   if (current) {
