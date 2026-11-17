@@ -208,7 +208,8 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
             m["layout"] = layouts[(m["x"], m["y"])]
     zone["entrances"] = zone_entrances(find_entrances(areas, passages), config, client, subareas)
     zone["passages"] = [{"a": [*p.a[0], p.a[1]], "b": [*p.b[0], p.b[1]], "t": p.t,
-                         **({"ua": list(p.ua)} if p.ua else {}), **({"ub": list(p.ub)} if p.ub else {})}
+                         **({"ua": list(p.ua)} if p.ua else {}), **({"ub": list(p.ub)} if p.ub else {}),
+                         **({"oneway": p.oneway} if p.oneway else {})}
                         for p in passages]
     links |= suns
     # Without a map file, join to all neighbours, except recorded maps:

@@ -21,7 +21,7 @@ import os
 import struct
 import zlib
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 Coords = tuple[int, int]
@@ -161,6 +161,8 @@ class Passage:
     # The suns it leaves a and enters b by, as (u, v) in their tiles (None if unknown).
     ua: tuple[float, float] | None = None
     ub: tuple[float, float] | None = None
+    # Walkable one way only: "ab" (a to b) or "ba"; None both ways.
+    oneway: str | None = None
 
 
 def read_cells(variables: dict[str, object]) -> tuple[dict[tuple[int, int], tuple[bool, bool]], int, int]:
@@ -354,7 +356,36 @@ def passages_between(areas: dict[Coords, list[Area]]) -> list[Passage]:
     # already leads elsewhere (a corner sun counts on two edges).
     used = {(p.a[0], p.ua) for p in passages} | {(p.b[0], p.ub) for p in passages}
     passages += [p for p in further if (p.a[0], p.ua) not in used and (p.b[0], p.ub) not in used]
-    return passages + _unpaired_suns(areas, passages)
+    return _one_way(areas, passages + _unpaired_suns(areas, passages))
+
+
+def _lands_in(areas: dict[Coords, list[Area]], src: Coords, uv, dst: Coords, part: int) -> bool:
+    """Whether leaving src by the sun at uv lands in that part of dst. You
+    arrive by the sun facing the one you left by, the closest along the
+    edge; a split map is entered in that sun's part only."""
+    for area in areas[src]:
+        for e in area.exits:
+            dx, dy = SIDES[e.side]
+            if e.uv != uv or (src[0] + dx, src[1] + dy) != dst:
+                continue
+            if e.inner:
+                return True
+            facing = [(abs(f.t - e.t), j) for j, other in enumerate(areas[dst])
+                      for f in other.exits if f.side == OPPOSITE[e.side] and not f.inner]
+            return not facing or min(facing)[1] == part
+    return True
+
+
+def _one_way(areas: dict[Coords, list[Area]], passages: list[Passage]) -> list[Passage]:
+    """Mark passages that only lead one way: from a map with one part to a
+    part of a split map that its sun doesn't lead into, you can come back
+    but not go."""
+    out = []
+    for p in passages:
+        ab = _lands_in(areas, p.a[0], p.ua, p.b[0], p.b[1])
+        ba = _lands_in(areas, p.b[0], p.ub, p.a[0], p.a[1])
+        out.append(p if ab == ba else replace(p, oneway="ab" if ab else "ba"))
+    return out
 
 
 OPPOSITE = {"left": "right", "right": "left", "top": "bottom", "bottom": "top"}

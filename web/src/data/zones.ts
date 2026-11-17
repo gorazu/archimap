@@ -68,6 +68,8 @@ export interface Zone {
     t: number;
     ua?: [number, number];
     ub?: [number, number];
+    /** Walkable one way only, a to b ("ab") or b to a ("ba"): into a split map, a sun leads to one part. */
+    oneway?: "ab" | "ba";
   }[];
 }
 

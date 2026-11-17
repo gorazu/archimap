@@ -194,3 +194,12 @@ def test_every_sun_towards_a_linked_map_gets_a_passage():
              (1, 0): [Area((0.5, 0.5), [Exit("left", 0.25, uv=(0.04, 0.25)), Exit("left", 0.75, uv=(0.04, 0.75))])]}
     passages = sorted((p.ua, p.ub) for p in passages_between(areas))
     assert passages == [((0.96, 0.3), (0.04, 0.25)), ((0.96, 0.7), (0.04, 0.75))]
+
+
+def test_a_sun_into_a_split_map_leads_to_one_part_only():
+    # (0,0) has one sun to the right, by the top; (1,0) is split, a sun by the top and one by the bottom.
+    areas = {(0, 0): [Area((0.5, 0.5), [Exit("right", 0.2, uv=(0.96, 0.2))])],
+             (1, 0): [Area((0.2, 0.2), [Exit("left", 0.25, uv=(0.04, 0.25))]),
+                      Area((0.2, 0.8), [Exit("left", 0.8, uv=(0.04, 0.8))])]}
+    ways = sorted((p.b[1], p.oneway) for p in passages_between(areas))
+    assert ways == [(0, None), (1, "ba")]  # the bottom part can be left, not entered
