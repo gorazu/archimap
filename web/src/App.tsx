@@ -7,7 +7,7 @@ import {
   fetchZone, fetchZoneIndex, isSelection, mapKey, partOf, splitSelection, zonePart, type Zone, type ZoneSummary,
 } from "./data/zones";
 import {
-  buildGraph, describePosition, guideFrom, planEntrances, routeProgress,
+  buildGraph, describePosition, guideFrom, locate, planEntrances, routeProgress,
   type EntranceRoute, type Guidance, type Progress, type RouteStep, type ZoneGraph,
 } from "./data/route";
 import { resolveZone, type ZoneLookup } from "./live/location";
@@ -183,12 +183,15 @@ export function App() {
   // guide had suggested from there: on a split map, they tell which part
   // the player came in by.
   const [previousMap, setPreviousMap] = useState<string | null>(null);
+  const [previousParts, setPreviousParts] = useState<number[]>([]);
   const [arrivedBy, setArrivedBy] = useState<RouteStep | null>(null);
   const lastCurrent = useRef<string | null>(null);
   const suggested = useRef<RouteStep | null>(null);
+  const located = useRef<number[]>([]);
   useEffect(() => {
     if (current && current !== lastCurrent.current) {
       setPreviousMap(lastCurrent.current);
+      setPreviousParts(located.current);
       setArrivedBy(suggested.current);
       lastCurrent.current = current;
     }
@@ -217,18 +220,17 @@ export function App() {
     [plan, graph, checked],
   );
   const guiding = (live.state.status === "running" || live.state.status === "paused") && current !== null;
-  const guidance = useMemo(() => {
-    if (!guiding || !plan || !progress || !graph) return null;
-    // On a split map: the part the suggested sun leads to, if that's the move
-    // the player made, else the parts reachable from the previous map first.
-    const here = graph.nodes.flatMap((n, i) => (n.map === current ? [i] : []));
-    const followed = arrivedBy && graph.nodes[arrivedBy.from]?.map === previousMap && graph.nodes[arrivedBy.to]?.map === current
-      ? [arrivedBy.to] : [];
-    const cameFrom = here.filter((i) => graph.nodes.some((n, j) => n.map === previousMap && graph.edges.get(j)!.has(i)));
-    const order = [...new Set([...followed, ...cameFrom, ...here])];
-    return guideFrom(plan.route, progress, graph, order);
-  }, [guiding, plan, progress, graph, current, previousMap, arrivedBy]);
+  // The part of the current map the player is on, as far as can be told.
+  const parts = useMemo(
+    () => (guiding && graph && current ? locate(graph, current, previousMap, previousParts, arrivedBy) : []),
+    [guiding, graph, current, previousMap, previousParts, arrivedBy],
+  );
+  const guidance = useMemo(
+    () => (plan && progress && graph && parts.length ? guideFrom(plan.route, progress, graph, parts) : null),
+    [plan, progress, graph, parts],
+  );
   useEffect(() => {
+    located.current = parts;
     suggested.current = guidance?.step ?? null;
   }, [guidance]);
   const left = zone ? zone.maps.filter((m) => !checked.has(mapKey(m.x, m.y))).length : 0;

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { buildGraph, describePosition, guideFrom, planEntrances, planRoute, routeProgress } from "./route";
+import { buildGraph, describePosition, guideFrom, locate, planEntrances, planRoute, routeProgress } from "./route";
 import type { Zone } from "./zones";
 
 const zone = (cells: [number, number][], links: [number, number, number, number][], extra: Partial<Zone> = {}): Zone => ({
@@ -140,4 +140,47 @@ test("one-way passages: the walk doesn't count on coming back through them", () 
   // Going down to [1,1] first would strand the walk there: it goes there last.
   expect(route.order).toEqual(["0,0", "1,0", "2,0", "1,1"]);
   expect(route.unreachable).toEqual([]);
+});
+
+test("the guide only uses the part the player is on", () => {
+  // Map [1,0] is split: part 0 leads left to [0,0] and down to [1,1]; part 1
+  // leads down to [1,1] too and right to [2,0]. The walk goes 0,0 -> 1,0#0 ->
+  // 1,1 -> 1,0#1 -> 2,0.
+  const z: Zone = {
+    ...zone([[0, 0], [1, 0], [2, 0], [1, 1]], [[0, 0, 1, 0], [1, 0, 2, 0], [1, 0, 1, 1]]),
+    passages: [
+      { a: [0, 0, 0], b: [1, 0, 0], t: 0.5 },
+      { a: [1, 0, 0], b: [1, 1, 0], t: 0.2 },
+      { a: [1, 0, 1], b: [1, 1, 0], t: 0.8 },
+      { a: [1, 0, 1], b: [2, 0, 0], t: 0.5 },
+    ],
+  };
+  z.maps[1].areas = [[0.2, 0.5], [0.8, 0.5]];
+  const g = buildGraph(z);
+  const node = (m: string, area = 0) => g.nodes.findIndex((n) => n.map === m && n.area === area);
+  const route = planRoute(g, all(z), [node("0,0")])!;
+  const progress = routeProgress(route, new Set(["0,0", "1,0", "1,1"]), g);
+  // Back from [1,1] onto [1,0]'s part 1: go right to [2,0], not left.
+  const guide = guideFrom(route, progress, g, [node("1,0", 1)]);
+  expect(g.nodes[guide.step!.to].map).toBe("2,0");
+  // On part 0, [2,0] is out of reach directly: through [1,1] first.
+  const other = guideFrom(route, progress, g, [node("1,0", 0)]);
+  expect(g.nodes[other.step!.to].map).toBe("1,1");
+});
+
+
+test("the player's part: from the sun taken, else from where they were", () => {
+  // [1,0] and [1,1] both split; [1,0]#0 - [1,1]#0 and [1,0]#1 - [1,1]#1.
+  const z: Zone = {
+    ...zone([[1, 0], [1, 1]], [[1, 0, 1, 1]]),
+    passages: [{ a: [1, 0, 0], b: [1, 1, 0], t: 0.2 }, { a: [1, 0, 1], b: [1, 1, 1], t: 0.8 }],
+  };
+  z.maps[0].areas = [[0.2, 0.5], [0.8, 0.5]];
+  z.maps[1].areas = [[0.2, 0.5], [0.8, 0.5]];
+  const g = buildGraph(z);
+  const node = (m: string, area: number) => g.nodes.findIndex((n) => n.map === m && n.area === area);
+  const step = g.edges.get(node("1,0", 1))!.get(node("1,1", 1))!;
+  expect(locate(g, "1,1", "1,0", [], step)).toEqual([node("1,1", 1)]); // took the suggested sun
+  expect(locate(g, "1,1", "1,0", [node("1,0", 0)], null)).toEqual([node("1,1", 0)]); // was on part 0 before
+  expect(locate(g, "1,1", "1,0", [], null)).toEqual([node("1,1", 0), node("1,1", 1)]); // can't tell
 });

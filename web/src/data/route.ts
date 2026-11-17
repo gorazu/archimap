@@ -386,6 +386,24 @@ export function guideFrom(route: Route, progress: Progress, g: ZoneGraph, here: 
   };
 }
 
+/**
+ * The parts of `map` the live player may be on. On a split map: the part
+ * the suggested sun leads to, if that's the move they made; else the parts
+ * reachable from where they were on the previous map; else all of them.
+ * Guiding from a part they aren't on could send them where they can't go.
+ */
+export function locate(
+  g: ZoneGraph, map: string, previousMap: string | null, previousParts: number[], arrivedBy: RouteStep | null,
+): number[] {
+  const here = g.nodes.flatMap((n, i) => (n.map === map ? [i] : []));
+  if (here.length === 1) return here;
+  if (arrivedBy && g.nodes[arrivedBy.from]?.map === previousMap && g.nodes[arrivedBy.to]?.map === map) return [arrivedBy.to];
+  const before = previousParts.filter((i) => g.nodes[i]?.map === previousMap);
+  const from = before.length ? before : g.nodes.flatMap((n, i) => (n.map === previousMap ? [i] : []));
+  const reached = here.filter((i) => from.some((j) => g.edges.get(j)!.has(i)));
+  return reached.length ? reached : here;
+}
+
 /** Where a sun is in the tile, in words, for the live guide ("en bas à gauche"). */
 export function describePosition([u, v]: [number, number]): string {
   const vertical = v < 0.33 ? "en haut" : v > 0.67 ? "en bas" : "";
