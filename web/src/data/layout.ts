@@ -34,6 +34,9 @@ export function cellPosition(id: number, w: number): [number, number] {
   return rest < w ? [rest * 2, pair * 2] : [(rest - w) * 2 + 1, pair * 2 + 1];
 }
 
+// Out of fights, characters move in 8 directions.
+const STEPS = [[1, 1], [1, -1], [-1, 1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]];
+
 /**
  * Walkable part of each cell (-1 for walls and off-map cells): some maps are
  * split into parts you can't walk between. Out of fights, characters move
@@ -43,7 +46,6 @@ export function floorParts(values: Uint8Array, w: number): Int16Array {
   const byPos = new Map<string, number>();
   values.forEach((_, id) => byPos.set(cellPosition(id, w).join(","), id));
   const parts = new Int16Array(values.length).fill(-1);
-  const steps = [[1, 1], [1, -1], [-1, 1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]];
   let next = 0;
   for (let start = 0; start < values.length; start++) {
     if (parts[start] !== -1 || (values[start] !== FLOOR && values[start] !== SUN)) continue;
@@ -53,7 +55,7 @@ export function floorParts(values: Uint8Array, w: number): Int16Array {
       if (parts[id] !== -1 || (values[id] !== FLOOR && values[id] !== SUN)) continue;
       parts[id] = next;
       const [x, y] = cellPosition(id, w);
-      for (const [dx, dy] of steps) {
+      for (const [dx, dy] of STEPS) {
         const other = byPos.get(`${x + dx},${y + dy}`);
         if (other !== undefined) stack.push(other);
       }
@@ -61,6 +63,64 @@ export function floorParts(values: Uint8Array, w: number): Int16Array {
     next++;
   }
   return parts;
+}
+
+/**
+ * The shortest walk over the map's floor between two points of the tile,
+ * (u, v) 0..1, as the corners of its path; null when the points aren't on
+ * the same floor part (or the layout isn't this map's: several maps can
+ * share coordinates).
+ */
+export function floorPath(layout: MapLayout, from: [number, number], to: [number, number]): [number, number][] | null {
+  const { w, h } = layout;
+  const values = decodeLayout(layout);
+  const cols = 2 * w - 2;
+  const rows = 2 * h - 2;
+  const byPos = new Map<string, number>();
+  values.forEach((_, id) => byPos.set(cellPosition(id, w).join(","), id));
+  const walkable = (id: number) => values[id] === FLOOR || values[id] === SUN;
+  const nearest = ([u, v]: [number, number]) => {
+    let best = -1;
+    let bestD = Infinity;
+    values.forEach((_, id) => {
+      if (!walkable(id)) return;
+      const [x, y] = cellPosition(id, w);
+      const d = (x / cols - u) ** 2 + ((y / rows - v) * 0.5) ** 2; // cells are twice as wide as tall
+      if (d < bestD) {
+        bestD = d;
+        best = id;
+      }
+    });
+    return best;
+  };
+  const start = nearest(from);
+  const goal = nearest(to);
+  if (start === -1 || goal === -1) return null;
+  const previous = new Map<number, number>([[start, start]]);
+  const queue = [start];
+  for (let head = 0; head < queue.length && !previous.has(goal); head++) {
+    const id = queue[head];
+    const [x, y] = cellPosition(id, w);
+    for (const [dx, dy] of STEPS) {
+      const next = byPos.get(`${x + dx},${y + dy}`);
+      if (next !== undefined && walkable(next) && !previous.has(next)) {
+        previous.set(next, id);
+        queue.push(next);
+      }
+    }
+  }
+  if (!previous.has(goal)) return null;
+  const cells = [goal];
+  while (cells[cells.length - 1] !== start) cells.push(previous.get(cells[cells.length - 1])!);
+  cells.reverse();
+  // Keep the corners only.
+  const points = cells.map((id) => cellPosition(id, w));
+  const corners = points.filter((p, i) => {
+    if (i === 0 || i === points.length - 1) return true;
+    const [a, b] = [points[i - 1], points[i + 1]];
+    return p[0] - a[0] !== b[0] - p[0] || p[1] - a[1] !== b[1] - p[1];
+  });
+  return corners.map(([x, y]) => [x / cols, y / rows]);
 }
 
 // Half a cell in pixels: game cells are about twice as wide as tall.

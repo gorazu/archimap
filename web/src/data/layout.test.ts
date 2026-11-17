@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cellCount, cellPosition, decodeLayout, FLOOR, floorParts, SUN, WALL } from "./layout";
+import { cellCount, cellPosition, decodeLayout, FLOOR, floorParts, floorPath, SUN, WALL } from "./layout";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 const pack = (values: number[]) => {
@@ -36,4 +36,23 @@ test("a wall of cells splits the floor into parts", () => {
   expect(left).not.toBe(-1);
   expect(right).not.toBe(-1);
   expect(left).not.toBe(right);
+});
+
+test("floor paths go around walls, and not between parts", () => {
+  // 5x3 map: floor, with a wall across the middle (rows 1 to 3 in half-cells) except at its right end.
+  const w = 5;
+  const h = 3;
+  const values = Array.from({ length: cellCount(w, h) }, (_, id) => {
+    const [x, y] = cellPosition(id, w);
+    return y >= 1 && y <= 3 && x < 7 ? WALL : FLOOR;
+  });
+  const layout = { w, h, cells: pack(values) };
+  // From the top left to the bottom left (x 0..8, y 0..4 in half-cells): around by the right.
+  const path = floorPath(layout, [0, 0], [0, 1])!;
+  expect(path[0]).toEqual([0, 0]);
+  expect(path[path.length - 1]).toEqual([0, 1]);
+  expect(Math.max(...path.map(([u]) => u))).toBeGreaterThan(0.8);
+  // Walled off completely: no path.
+  const closed = { w, h, cells: pack(values.map((v, id) => ([1, 2, 3].includes(cellPosition(id, w)[1]) ? WALL : v))) };
+  expect(floorPath(closed, [0, 0], [0, 1])).toBeNull();
 });

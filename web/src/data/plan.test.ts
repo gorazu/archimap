@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { planShapes, routeShapes } from "./plan";
+import { alongPaths, planShapes, routeShapes } from "./plan";
 import { buildGraph, planRoute } from "./route";
 import type { Zone } from "./zones";
 
@@ -43,4 +43,20 @@ test("a route is drawn from sun to sun and numbered in visiting order", () => {
   const shapes = routeShapes(z, graph, route);
   expect(shapes.line.map((pt) => pt.map(Math.round))).toEqual([[-50, 50], [-50, 90], [-50, 110]]);
   expect(shapes.numbers.map((n) => [n.map, n.label])).toEqual([["0,0", "1"], ["1,0", "2"]]);
+});
+
+
+test("the walk inside a map follows its drawn paths", () => {
+  // Paths as the pipeline draws them: a tree from the first sun, the second
+  // path ending in the middle of the first one's stretch.
+  const m = {
+    x: 0, y: 0, source: "client" as const,
+    paths: [
+      [[0.1, 0.5], [0.5, 0.5], [0.9, 0.5]],
+      [[0.7, 0.9], [0.7, 0.5]],
+    ] as [number, number][][],
+  };
+  expect(alongPaths(m, [0.1, 0.5], [0.7, 0.9], [100, 100])).toEqual([[0.1, 0.5], [0.5, 0.5], [0.7, 0.5], [0.7, 0.9]]);
+  expect(alongPaths(m, [0.9, 0.5], [0.7, 0.9], [100, 100])).toEqual([[0.9, 0.5], [0.7, 0.5], [0.7, 0.9]]);
+  expect(alongPaths(m, [0.1, 0.5], [0.3, 0.1], [100, 100])).toBeNull(); // not a point of the paths
 });

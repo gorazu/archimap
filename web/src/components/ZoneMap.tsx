@@ -188,8 +188,8 @@ const PlanLayer = memo(function PlanLayer({ zone, showPaths }: { zone: Zone; sho
 function RouteLayer({ zone, graph, plan, progress, checked }: {
   zone: Zone; graph: ZoneGraph; plan: EntranceRoute; progress: Progress; checked: CheckedSet;
 }) {
-  const shapes = useMemo(() => routeShapes(zone, graph, plan.route), [zone, graph, plan]);
-  const split = 2 * progress.fromIndex; // line point where the stretch to the next goal begins
+  const shapes = useMemo(() => routeShapes(zone, graph, plan.route, plan.entrance?.uv), [zone, graph, plan]);
+  const split = shapes.arrivals[progress.fromIndex]; // where the stretch to the next goal begins
   const icons = useMemo(
     () => shapes.numbers.map((n, i) =>
       L.divIcon({
