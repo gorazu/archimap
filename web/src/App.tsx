@@ -8,7 +8,7 @@ import {
 } from "./data/zones";
 import {
   buildGraph, describePosition, guideFrom, planEntrances, routeProgress,
-  type EntranceRoute, type Guidance, type Progress, type ZoneGraph,
+  type EntranceRoute, type Guidance, type Progress, type RouteStep, type ZoneGraph,
 } from "./data/route";
 import { resolveZone, type ZoneLookup } from "./live/location";
 import { isLiveCaptureSupported } from "./live/session";
@@ -179,13 +179,17 @@ export function App() {
     if (target !== slug && (positionZone !== zoneSlug || part) && live.options.autoZone) setSlug(target);
   }, [positionKey, positionZone, lookups, store, slug, zoneSlug, partSlug, zoneData, live.options.autoZone]);
 
-  // The map the live player was on before the current one: on a split map,
-  // it tells which part they came in by.
+  // The map the live player was on before the current one, and the move the
+  // guide had suggested from there: on a split map, they tell which part
+  // the player came in by.
   const [previousMap, setPreviousMap] = useState<string | null>(null);
+  const [arrivedBy, setArrivedBy] = useState<RouteStep | null>(null);
   const lastCurrent = useRef<string | null>(null);
+  const suggested = useRef<RouteStep | null>(null);
   useEffect(() => {
     if (current && current !== lastCurrent.current) {
       setPreviousMap(lastCurrent.current);
+      setArrivedBy(suggested.current);
       lastCurrent.current = current;
     }
   }, [current]);
@@ -215,11 +219,18 @@ export function App() {
   const guiding = (live.state.status === "running" || live.state.status === "paused") && current !== null;
   const guidance = useMemo(() => {
     if (!guiding || !plan || !progress || !graph) return null;
-    // On a split map, the part entered from the previous map comes first.
+    // On a split map: the part the suggested sun leads to, if that's the move
+    // the player made, else the parts reachable from the previous map first.
     const here = graph.nodes.flatMap((n, i) => (n.map === current ? [i] : []));
-    const cameFrom = here.filter((i) => [...graph.edges.get(i)!.keys()].some((j) => graph.nodes[j].map === previousMap));
-    return guideFrom(plan.route, progress, graph, [...cameFrom, ...here.filter((i) => !cameFrom.includes(i))]);
-  }, [guiding, plan, progress, graph, current, previousMap]);
+    const followed = arrivedBy && graph.nodes[arrivedBy.from]?.map === previousMap && graph.nodes[arrivedBy.to]?.map === current
+      ? [arrivedBy.to] : [];
+    const cameFrom = here.filter((i) => graph.nodes.some((n, j) => n.map === previousMap && graph.edges.get(j)!.has(i)));
+    const order = [...new Set([...followed, ...cameFrom, ...here])];
+    return guideFrom(plan.route, progress, graph, order);
+  }, [guiding, plan, progress, graph, current, previousMap, arrivedBy]);
+  useEffect(() => {
+    suggested.current = guidance?.step ?? null;
+  }, [guidance]);
   const left = zone ? zone.maps.filter((m) => !checked.has(mapKey(m.x, m.y))).length : 0;
   const guide = guidance && progress && graph && plan
     ? guideText(guidance, progress, graph, left, plan.route.unreachable.length) : null;
