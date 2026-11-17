@@ -49,11 +49,13 @@ export function buildGraph(zone: Zone): ZoneGraph {
     }
   }
   const edges = new Map<number, Map<number, RouteStep>>(nodes.map((_, i) => [i, new Map()]));
-  const connect = (a: number | undefined, b: number | undefined, leave?: [number, number], enter?: [number, number]) => {
+  const connect = (
+    a: number | undefined, b: number | undefined, leave?: [number, number], enter?: [number, number], oneway?: "ab" | "ba",
+  ) => {
+    if (a === undefined || b === undefined || a === b) return;
     // Two suns can lead to the same part: keep the first one listed.
-    if (a === undefined || b === undefined || a === b || edges.get(a)!.has(b)) return;
-    edges.get(a)!.set(b, { from: a, to: b, leave, enter });
-    edges.get(b)!.set(a, { from: b, to: a, leave: enter, enter: leave });
+    if (oneway !== "ba" && !edges.get(a)!.has(b)) edges.get(a)!.set(b, { from: a, to: b, leave, enter });
+    if (oneway !== "ab" && !edges.get(b)!.has(a)) edges.get(b)!.set(a, { from: b, to: a, leave: enter, enter: leave });
   };
   const covered = new Set<string>();
   for (const p of zone.passages ?? []) {
@@ -62,6 +64,7 @@ export function buildGraph(zone: Zone): ZoneGraph {
       index.get(`${p.b[0]},${p.b[1]}#${p.b[2]}`),
       p.ua,
       p.ub,
+      p.oneway,
     );
     covered.add(`${p.a[0]},${p.a[1]}|${p.b[0]},${p.b[1]}`);
   }
@@ -103,12 +106,27 @@ function greedyTour(g: ZoneGraph, start: number, targets: Set<string>): number[]
   const seen = new Set([g.nodes[start].map]);
   let at = start;
   for (;;) {
+    // Maps still reachable from here: a one-way passage mustn't cut any of them off.
+    const left = new Set<string>();
+    for (let v = 0; v < n; v++) {
+      const map = g.nodes[v].map;
+      if (g.dist[at * n + v] > 0 && !seen.has(map) && targets.has(map)) left.add(map);
+    }
+    const keepsAll = (v: number) => {
+      const reach = new Set<string>();
+      for (let w = 0; w < n; w++) if (g.dist[v * n + w] >= 0) reach.add(g.nodes[w].map);
+      for (const map of left) if (!reach.has(map) && map !== g.nodes[v].map && !pathBetween(g, at, v).some((u) => g.nodes[u].map === map)) return false;
+      return true;
+    };
     let best = -1;
+    let fallback = -1;
     for (let v = 0; v < n; v++) {
       const d = g.dist[at * n + v];
       if (d <= 0 || seen.has(g.nodes[v].map) || !targets.has(g.nodes[v].map)) continue;
-      if (best === -1 || d < g.dist[at * n + best]) best = v;
+      if (fallback === -1 || d < g.dist[at * n + fallback]) fallback = v;
+      if ((best === -1 || d < g.dist[at * n + best]) && keepsAll(v)) best = v;
     }
+    if (best === -1) best = fallback;
     if (best === -1) return tour;
     for (const v of pathBetween(g, at, best).slice(1)) {
       if (!seen.has(g.nodes[v].map)) {
@@ -120,31 +138,53 @@ function greedyTour(g: ZoneGraph, start: number, targets: Set<string>): number[]
   }
 }
 
+/** Moves from a to b; a large number when b can't be reached from a (one-way passages). */
+const FAR = 1_000_000;
+function cost(g: ZoneGraph, a: number, b: number): number {
+  const d = g.dist[a * g.nodes.length + b];
+  return d < 0 ? FAR : d;
+}
+
 function tourCost(g: ZoneGraph, tour: number[]): number {
-  const n = g.nodes.length;
-  let cost = 0;
-  for (let i = 1; i < tour.length; i++) cost += g.dist[tour[i - 1] * n + tour[i]];
-  return cost;
+  let total = 0;
+  for (let i = 1; i < tour.length; i++) total += cost(g, tour[i - 1], tour[i]);
+  return total;
 }
 
 /**
  * Improve a visiting order (start kept) while it shortens the walk: reverse
- * a stretch of it (2-opt), or move one map elsewhere in it (or-opt). Moves
- * are evaluated by their change in cost only.
+ * a stretch of it (2-opt), move one map elsewhere in it (or-opt), or visit
+ * a map by another of its parts. One-way passages make the cost of a stretch
+ * depend on its direction, so a reversed stretch is priced both ways.
  */
 function improve(g: ZoneGraph, tour: number[]): number[] {
-  const n = g.nodes.length;
-  const d = (a: number, b: number) => g.dist[a * n + b];
+  const d = (a: number, b: number) => cost(g, a, b);
+  const partsOf = new Map<string, number[]>();
+  g.nodes.forEach((node, i) => partsOf.set(node.map, [...(partsOf.get(node.map) ?? []), i]));
   const t = [...tour];
   let improved = true;
   while (improved) {
     improved = false;
+    // Running costs of the order forwards and backwards, for 2-opt.
+    let forward: number[] = [];
+    let backward: number[] = [];
+    const sums = () => {
+      forward = [0];
+      backward = [0];
+      for (let k = 1; k < t.length; k++) {
+        forward.push(forward[k - 1] + d(t[k - 1], t[k]));
+        backward.push(backward[k - 1] + d(t[k], t[k - 1]));
+      }
+    };
+    sums();
     for (let i = 1; i < t.length - 1; i++) {
       for (let j = i + 1; j < t.length; j++) {
-        const before = d(t[i - 1], t[i]) + (j + 1 < t.length ? d(t[j], t[j + 1]) : 0);
-        const after = d(t[i - 1], t[j]) + (j + 1 < t.length ? d(t[i], t[j + 1]) : 0);
+        const next = j + 1 < t.length;
+        const before = d(t[i - 1], t[i]) + (forward[j] - forward[i]) + (next ? d(t[j], t[j + 1]) : 0);
+        const after = d(t[i - 1], t[j]) + (backward[j] - backward[i]) + (next ? d(t[i], t[j + 1]) : 0);
         if (after < before) {
           t.splice(i, j - i + 1, ...t.slice(i, j + 1).reverse());
+          sums();
           improved = true;
         }
       }
@@ -167,6 +207,18 @@ function improve(g: ZoneGraph, tour: number[]): number[] {
         rest.splice(at, 0, x);
         t.splice(0, t.length, ...rest);
         improved = true;
+      }
+    }
+    // Split maps: the part reached first can matter.
+    for (let i = 1; i < t.length; i++) {
+      const next = i + 1 < t.length;
+      const here = d(t[i - 1], t[i]) + (next ? d(t[i], t[i + 1]) : 0);
+      for (const other of partsOf.get(g.nodes[t[i]].map)!) {
+        if (other !== t[i] && d(t[i - 1], other) + (next ? d(other, t[i + 1]) : 0) < here) {
+          t[i] = other;
+          improved = true;
+          break;
+        }
       }
     }
   }

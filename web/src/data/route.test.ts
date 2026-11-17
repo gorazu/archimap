@@ -119,3 +119,25 @@ test("the guide follows the route, or leads back to it", () => {
   expect([g.nodes[off.step!.to].map, off.detour, off.remaining]).toEqual(["1,0", true, 3]);
   expect(guideFrom(route, routeProgress(route, all(z), g), g, [node("3,0")]).step).toBeNull();
 });
+
+
+test("one-way passages: the walk doesn't count on coming back through them", () => {
+  // 0 - 1 - 2 in a row, and 1 -> 3 one way only, 3 -> 2 one way.
+  const z: Zone = {
+    ...zone([[0, 0], [1, 0], [2, 0], [1, 1]], [[0, 0, 1, 0], [1, 0, 2, 0]]),
+    passages: [
+      { a: [0, 0, 0], b: [1, 0, 0], t: 0.5 },
+      { a: [1, 0, 0], b: [2, 0, 0], t: 0.5 },
+      { a: [1, 0, 0], b: [1, 1, 0], t: 0.5, oneway: "ab" },
+      { a: [2, 0, 0], b: [2, 1, 0], t: 0.5 },
+    ],
+  };
+  z.links = [...z.links!, [1, 0, 1, 1]];
+  const g = buildGraph(z);
+  const node = (m: string) => g.nodes.findIndex((n) => n.map === m);
+  expect(g.dist[node("1,1") * g.nodes.length + node("1,0")]).toBe(-1); // no way back
+  const route = planRoute(g, all(z), [node("0,0")])!;
+  // Going down to [1,1] first would strand the walk there: it goes there last.
+  expect(route.order).toEqual(["0,0", "1,0", "2,0", "1,1"]);
+  expect(route.unreachable).toEqual([]);
+});
