@@ -49,9 +49,10 @@ test("floor paths go around walls, and not between parts", () => {
   const layout = { w, h, cells: pack(values) };
   // From the top left to the bottom left (x 0..8, y 0..4 in half-cells): around by the right.
   const path = floorPath(layout, [0, 0], [0, 1])!;
-  expect(path[0]).toEqual([0, 0]);
-  expect(path[path.length - 1]).toEqual([0, 1]);
-  expect(Math.max(...path.map(([u]) => u))).toBeGreaterThan(0.8);
+  // Cells sit a half-cell in from the tile's edges: the corner cells' centres.
+  expect(path[0]).toEqual([1 / 10, 1 / 6]);
+  expect(path[path.length - 1]).toEqual([1 / 10, 5 / 6]);
+  expect(Math.max(...path.map(([u]) => u))).toBeGreaterThan(0.7);
   // Walled off completely: no path.
   const closed = { w, h, cells: pack(values.map((v, id) => ([1, 2, 3].includes(cellPosition(id, w)[1]) ? WALL : v))) };
   expect(floorPath(closed, [0, 0], [0, 1])).toBeNull();

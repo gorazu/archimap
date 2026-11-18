@@ -30,9 +30,17 @@ const fr = {
     checked: " · vérifiée",
     estimated: "Position estimée",
   },
+  floor: {
+    label: "Palier",
+    number: "Palier {{n}}",
+    up: "Monter d'un palier",
+    down: "Descendre d'un palier",
+    nothing: "rien à vérifier",
+    stairsTo: "Escalier vers : {{floor}}",
+  },
   route: {
     entrance: "Entrée",
-    kind: { ladder: "échelle", sun: "soleil", manual: "entrée" },
+    kind: { ladder: "échelle", sun: "soleil", manual: "entrée", zaap: "zaap" },
     onlyMaps_one: "seulement {{count}} carte",
     onlyMaps_other: "seulement {{count}} cartes",
     moves_one: "{{count}} déplacement",

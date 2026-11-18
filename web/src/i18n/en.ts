@@ -31,9 +31,17 @@ const en: Resources = {
     checked: " · checked",
     estimated: "Estimated position",
   },
+  floor: {
+    label: "Landing",
+    number: "Landing {{n}}",
+    up: "One landing up",
+    down: "One landing down",
+    nothing: "nothing to check",
+    stairsTo: "Stairs to: {{floor}}",
+  },
   route: {
     entrance: "Entrance",
-    kind: { ladder: "ladder", sun: "sun", manual: "entrance" },
+    kind: { ladder: "ladder", sun: "sun", manual: "entrance", zaap: "zaap" },
     onlyMaps_one: "only {{count}} map",
     onlyMaps_other: "only {{count}} maps",
     moves_one: "{{count}} move",
