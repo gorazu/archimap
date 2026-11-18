@@ -119,6 +119,7 @@ const fr = {
     coordsDefault: "coordonnées : position par défaut",
     analysing: "Analyse de la fenêtre…",
     ocrPreview: "Ce que lit l'OCR",
+    moves: "Changements de map vus",
     stability: "Stabilité : {{count}} lectures identiques",
     autoZone: "Changer de zone automatiquement",
     recalibrate: "Recalibrer la détection",

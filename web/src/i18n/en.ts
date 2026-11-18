@@ -118,6 +118,7 @@ const en: Resources = {
     coordsDefault: "coordinates: default position",
     analysing: "Analysing the window…",
     ocrPreview: "What OCR reads",
+    moves: "Map changes seen",
     stability: "Stability: {{count}} identical readings",
     autoZone: "Switch zones automatically",
     recalibrate: "Recalibrate detection",

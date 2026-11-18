@@ -72,8 +72,13 @@ export const IDLE_STATE: LiveState = {
 };
 
 const TICK_MS = 400;
-/** Loading screens between maps last 0.1-0.2 s: the game view is checked for them this often. */
-const LOADING_MS = 50;
+/**
+ * Loading screens between maps last 0.1-0.2 s: the capture runs fast
+ * enough to show them (only a tiny copy of the game view is looked at),
+ * and the view is checked for them this often.
+ */
+const CAPTURE_FPS = 30;
+const LOADING_MS = 30;
 const LAYOUT_SAMPLES = 12;
 const LAYOUT_SAMPLE_MS = 1000;
 /** The top-left corner (location line, and the label until found) is read this often. */
@@ -142,7 +147,7 @@ export class LiveSession {
     if (this.state.status !== "idle" && this.state.status !== "error") return;
     this.update({ ...IDLE_STATE, status: "starting", message: { key: "chooseWindow" } });
     try {
-      this.stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 5 } }, audio: false });
+      this.stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: CAPTURE_FPS } }, audio: false });
     } catch {
       this.update({ ...IDLE_STATE, message: { key: "cancelled" } });
       return;
@@ -240,23 +245,48 @@ export class LiveSession {
 
   /** Counts map changes: each loading screen (a dark game view) is one. */
   private watchLoading() {
+    const track = this.stream?.getVideoTracks()[0];
+    // Every captured frame where the browser hands them over, else a frequent look at the video.
+    const Processor = (globalThis as { MediaStreamTrackProcessor?: new (init: { track: MediaStreamTrack }) => {
+      readable: ReadableStream<VideoFrame>;
+    } }).MediaStreamTrackProcessor;
+    if (track && Processor) {
+      const copy = track.clone();
+      const reader = new Processor({ track: copy }).readable.getReader();
+      this.cancelWatch = () => {
+        void reader.cancel();
+        copy.stop();
+      };
+      void (async () => {
+        for (;;) {
+          const { value: frame, done } = await reader.read().catch(() => ({ value: undefined, done: true }));
+          if (done || !frame) return;
+          this.checkLoading(frame);
+          frame.close();
+        }
+      })();
+      return;
+    }
     if (!this.ticker) return;
     this.cancelWatch = this.ticker.after(LOADING_MS, () => {
-      const video = this.video;
-      if (this.state.status === "running" && video?.videoWidth && this.game) {
-        const { x, y, w, h } = this.game;
-        this.thumb ??= canvas(32, 18);
-        const ctx = this.thumb.getContext("2d", { willReadFrequently: true })!;
-        ctx.drawImage(video, x, y, w, h, 0, 0, 32, 18);
-        const loading = isLoadingFrame({ small: toGray(ctx.getImageData(0, 0, 32, 18)).data });
-        if (loading && !this.loading) {
-          this.tracker.moved();
-          this.update({ moves: this.state.moves + 1 });
-        }
-        this.loading = loading;
-      }
+      if (this.video?.videoWidth) this.checkLoading(this.video);
       if (this.stream) this.watchLoading();
     });
+  }
+
+  /** One loading screen (a dark game view) is one map change. */
+  private checkLoading(source: CanvasImageSource) {
+    if (this.state.status !== "running" || !this.game) return;
+    const { x, y, w, h } = this.game;
+    this.thumb ??= canvas(32, 18);
+    const ctx = this.thumb.getContext("2d", { willReadFrequently: true })!;
+    ctx.drawImage(source, x, y, w, h, 0, 0, 32, 18);
+    const loading = isLoadingFrame({ small: toGray(ctx.getImageData(0, 0, 32, 18)).data });
+    if (loading && !this.loading) {
+      this.tracker.moved();
+      this.update({ moves: this.state.moves + 1 });
+    }
+    this.loading = loading;
   }
 
   private async tick() {

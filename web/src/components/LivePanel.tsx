@@ -117,6 +117,8 @@ export function LivePanel({ live, positionZone, guide, floating, onClose }: Prop
             )}
             <dt>{t("live.place")}</dt>
             <dd>{state.location ?? t("live.unreadable")}</dd>
+            <dt>{t("live.moves")}</dt>
+            <dd>{state.moves}</dd>
             <dt>{t("live.reading")}</dt>
             <dd>
               <code>{state.readings.length ? state.readings.map((r) => r || "—").join("  |  ") : "—"}</code>
