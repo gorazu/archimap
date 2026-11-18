@@ -54,13 +54,15 @@ def export_zone(maps: list[MapVisit], zone: str, name: str, source_video: str,
 
 
 def update_zone_index(data_dir: Path, zone: str, name: str, map_count: int,
-                      subarea: str | None = None, parts: list[dict] | None = None) -> Path:
+                      subarea: str | None = None, parts: list[dict] | None = None,
+                      subareas: list[str] | None = None) -> Path:
     """Add or replace the zone's entry in zones.json, which lists zones for the web app.
 
     `subarea` is the in-game sub-area name, as shown in the game's location
     line ("Bonta (Egout de Bonta)"); live capture uses it to tell which zone
     the player is in. When not given, the one already listed is kept.
-    A zone made of several sub-areas lists them as `parts` instead.
+    A zone made of several sub-areas lists them as `parts` instead, or as
+    `subareas` when they can't be shown alone (stacked floors).
     """
     path = data_dir / "zones.json"
     zones = json.loads(path.read_text())["zones"] if path.is_file() else []
@@ -69,6 +71,8 @@ def update_zone_index(data_dir: Path, zone: str, name: str, map_count: int,
     entry = {"zone": zone, "name": name, "maps": map_count}
     if parts:
         entry["parts"] = parts
+    elif subareas:
+        entry["subareas"] = subareas
     elif subarea or old.get("subarea"):
         entry["subarea"] = subarea or old["subarea"]
     zones.append(entry)
