@@ -65,6 +65,42 @@ export function floorParts(values: Uint8Array, w: number): Int16Array {
   return parts;
 }
 
+/** The floor cell drawn nearest to a point (u, v), which can lie outside the tile. */
+export function nearestFloor(layout: MapLayout, [u, v]: [number, number]): [number, number] | null {
+  const { w, h } = layout;
+  let best: [number, number] | null = null;
+  let bestD = Infinity;
+  decodeLayout(layout).forEach((value, id) => {
+    if (value !== FLOOR && value !== SUN) return;
+    const [x, y] = cellPosition(id, w);
+    const at: [number, number] = [(x + 1) / (2 * w), (y + 1) / (2 * h)];
+    const d = (at[0] - u) ** 2 + ((at[1] - v) * 0.5) ** 2; // cells are twice as wide as tall
+    if (d < bestD) {
+      bestD = d;
+      best = at;
+    }
+  });
+  return best;
+}
+
+/** The sun drawn nearest to a point of the tile, (u, v), as drawn by drawLayout. */
+export function nearestSun(layout: MapLayout, [u, v]: [number, number]): [number, number] | null {
+  const { w, h } = layout;
+  let best: [number, number] | null = null;
+  let bestD = Infinity;
+  decodeLayout(layout).forEach((value, id) => {
+    if (value !== SUN) return;
+    const [x, y] = cellPosition(id, w);
+    const at: [number, number] = [(x + 1) / (2 * w), (y + 1) / (2 * h)];
+    const d = (at[0] - u) ** 2 + (at[1] - v) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = at;
+    }
+  });
+  return best;
+}
+
 /**
  * The shortest walk over the map's floor between two points of the tile,
  * (u, v) 0..1, as the corners of its path; null when the points aren't on
@@ -85,7 +121,7 @@ export function floorPath(layout: MapLayout, from: [number, number], to: [number
     values.forEach((_, id) => {
       if (!walkable(id)) return;
       const [x, y] = cellPosition(id, w);
-      const d = (x / cols - u) ** 2 + ((y / rows - v) * 0.5) ** 2; // cells are twice as wide as tall
+      const d = ((x + 1) / (cols + 2) - u) ** 2 + (((y + 1) / (rows + 2) - v) * 0.5) ** 2; // cells are twice as wide as tall
       if (d < bestD) {
         bestD = d;
         best = id;
@@ -120,7 +156,7 @@ export function floorPath(layout: MapLayout, from: [number, number], to: [number
     const [a, b] = [points[i - 1], points[i + 1]];
     return p[0] - a[0] !== b[0] - p[0] || p[1] - a[1] !== b[1] - p[1];
   });
-  return corners.map(([x, y]) => [x / cols, y / rows]);
+  return corners.map(([x, y]) => [(x + 1) / (cols + 2), (y + 1) / (rows + 2)]);
 }
 
 // Half a cell in pixels: game cells are about twice as wide as tall.
@@ -131,7 +167,10 @@ const COLOURS = { wall: "#17130f", sun: "#ffc94d", deadFloor: "#3d3428" };
 const FLOORS = ["#6e5d45", "#4f6c80", "#80594d", "#5a7a52"];
 
 /** The layout as an image (data URL), for an image overlay in the plan tile. */
-export function drawLayout(layout: MapLayout): string {
+/** Suns drawn this close (in tile units) to a hidden point are left out: an icon replaces them. */
+const HIDDEN_SUN = 0.08;
+
+export function drawLayout(layout: MapLayout, hide: [number, number][] = []): string {
   const { w, h } = layout;
   const values = decodeLayout(layout);
   const parts = floorParts(values, w);
@@ -160,7 +199,8 @@ export function drawLayout(layout: MapLayout): string {
     ctx.closePath();
     ctx.fillStyle = value === WALL ? COLOURS.wall : colourOf(parts[id]);
     ctx.fill();
-    if (value === SUN) suns.push([cx, cy]);
+    const hidden = hide.some(([u, v]) => Math.hypot((x + 1) / (2 * w) - u, (y + 1) / (2 * h) - v) < HIDDEN_SUN);
+    if (value === SUN && !hidden) suns.push([cx, cy]);
   });
   ctx.fillStyle = COLOURS.sun;
   for (const [cx, cy] of suns) {
