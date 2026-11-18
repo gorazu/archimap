@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { drawLayout } from "../data/layout";
 import type { RouteStep, ZoneGraph } from "../data/route";
 import { mapKey, type MapEntry, type Zone } from "../data/zones";
@@ -76,6 +77,7 @@ interface Props {
 
 export function FloatingGuide({ zone, checked, checkedCount, active, current, elsewhere, guide, nextStep, graph }: Props) {
   const total = zone.maps.length;
+  const { t } = useTranslation();
   return (
     <div className="floating">
       <header className="floating-head">
@@ -85,9 +87,9 @@ export function FloatingGuide({ zone, checked, checkedCount, active, current, el
         </span>
       </header>
       {!active ? (
-        <p className="floating-note">Démarrez la capture (bouton Direct) pour être guidé.</p>
+        <p className="floating-note">{t("floating.startCapture")}</p>
       ) : !current ? (
-        <p className="floating-note">{elsewhere ? `Position ${elsewhere}, hors de cette zone.` : "En attente de la position…"}</p>
+        <p className="floating-note">{elsewhere ? t("floating.elsewhere", { position: elsewhere }) : t("floating.waiting")}</p>
       ) : (
         <>
           {guide && (
@@ -118,6 +120,7 @@ function MiniMap({ zone, checked, current, nextStep, graph }: {
   zone: Zone; checked: CheckedSet; current: string; nextStep: RouteStep | null; graph: ZoneGraph | null;
 }) {
   const [cx, cy] = current.split(",").map(Number);
+  const { t } = useTranslation();
   const [w, h] = zone.tile_size;
   const tileH = h > 0 ? (TILE_W * h) / w : TILE_W * 0.6;
   const maps = useMemo(() => new Map(zone.maps.map((m) => [mapKey(m.x, m.y), m])), [zone]);
@@ -138,7 +141,7 @@ function MiniMap({ zone, checked, current, nextStep, graph }: {
     move = { from: at(a.x, a.y, nextStep.leave ?? [0.5, 0.5]), to: at(b.x, b.y, [0.5, 0.5]) };
   }
   return (
-    <svg className="mini-map" viewBox={`0 0 ${3 * TILE_W} ${3 * tileH}`} role="img" aria-label="Cartes autour de vous">
+    <svg className="mini-map" viewBox={`0 0 ${3 * TILE_W} ${3 * tileH}`} role="img" aria-label={t("floating.around")}>
       <defs>
         <marker id="mini-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
           <path d="M0 0 L10 5 L0 10 z" fill="#4fc3ff" />

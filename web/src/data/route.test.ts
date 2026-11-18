@@ -71,10 +71,10 @@ test("maps out of reach inside the zone are reported, not planned", () => {
 });
 
 test("sun positions in words", () => {
-  expect(describePosition([0.1, 0.9])).toBe("en bas à gauche");
-  expect(describePosition([0.5, 0.05])).toBe("en haut au centre");
-  expect(describePosition([0.95, 0.5])).toBe("au milieu à droite");
-  expect(describePosition([0.5, 0.5])).toBe("au centre");
+  expect(describePosition([0.1, 0.9])).toBe("bottom-left");
+  expect(describePosition([0.5, 0.05])).toBe("top");
+  expect(describePosition([0.95, 0.5])).toBe("right");
+  expect(describePosition([0.5, 0.5])).toBe("center");
 });
 
 const line = (n: number): Zone =>

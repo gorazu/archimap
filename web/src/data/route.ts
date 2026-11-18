@@ -404,12 +404,13 @@ export function locate(
   return reached.length ? reached : here;
 }
 
-/** Where a sun is in the tile, in words, for the live guide ("en bas à gauche"). */
-export function describePosition([u, v]: [number, number]): string {
-  const vertical = v < 0.33 ? "en haut" : v > 0.67 ? "en bas" : "";
-  const horizontal = u < 0.33 ? "à gauche" : u > 0.67 ? "à droite" : "";
-  if (vertical && horizontal) return `${vertical} ${horizontal}`;
-  if (vertical) return `${vertical} au centre`;
-  if (horizontal) return horizontal.replace("à ", "au milieu à ");
-  return "au centre";
+export type TilePosition =
+  | "top-left" | "top" | "top-right" | "left" | "center" | "right" | "bottom-left" | "bottom" | "bottom-right";
+
+/** Where a sun is in the tile, for the live guide to say ("bottom-left"). */
+export function describePosition([u, v]: [number, number]): TilePosition {
+  const vertical = v < 0.33 ? "top" : v > 0.67 ? "bottom" : "";
+  const horizontal = u < 0.33 ? "left" : u > 0.67 ? "right" : "";
+  if (vertical && horizontal) return `${vertical}-${horizontal}`;
+  return vertical || horizontal || "center";
 }

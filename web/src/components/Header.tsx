@@ -1,4 +1,6 @@
-import { AlertDialog, Progress, Select, Toggle } from "radix-ui";
+import { AlertDialog, Progress, Select, Toggle, ToggleGroup } from "radix-ui";
+import { Trans, useTranslation } from "react-i18next";
+import { currentLanguage, LANGUAGES, type Language } from "../i18n";
 import type { ZoneSummary } from "../data/zones";
 import type { LiveStatus } from "../live/session";
 
@@ -15,10 +17,13 @@ interface Props {
 }
 
 export function Header({ zones, current, onSelectZone, checkedCount, total, newHunt, live }: Props) {
+  const { t } = useTranslation();
   const done = total > 0 && checkedCount === total;
   return (
     <header className="header">
       <h1 className="brand">Archimap</h1>
+
+      <LanguagePicker />
 
       {zones.length > 1 ? (
         <ZoneSelect zones={zones} current={current} onSelect={onSelectZone} />
@@ -29,10 +34,10 @@ export function Header({ zones, current, onSelectZone, checkedCount, total, newH
       {total > 0 && (
         <div className={`progress${done ? " done" : ""}`} role="status">
           <span className="progress-text">
-            {done ? "Zone terminée ! " : ""}
-            <strong>{checkedCount}</strong> / {total} vérifiées
+            {done ? t("header.zoneDone") : ""}
+            <Trans i18nKey="header.checked" values={{ count: checkedCount, total }} components={[<strong />]} />
           </span>
-          <Progress.Root className="progress-bar" value={checkedCount} max={total} aria-label="Cartes vérifiées">
+          <Progress.Root className="progress-bar" value={checkedCount} max={total} aria-label={t("header.checkedLabel")}>
             <Progress.Indicator className="progress-fill" style={{ width: `${(checkedCount / total) * 100}%` }} />
           </Progress.Root>
         </div>
@@ -41,7 +46,7 @@ export function Header({ zones, current, onSelectZone, checkedCount, total, newH
       {live && total > 0 && (
         <Toggle.Root className="button live-toggle" pressed={live.open} onPressedChange={live.onToggle}>
           <span className={`live-dot ${live.status}`} aria-hidden="true" />
-          Direct
+          {t("header.live")}
         </Toggle.Root>
       )}
 
@@ -50,13 +55,59 @@ export function Header({ zones, current, onSelectZone, checkedCount, total, newH
   );
 }
 
+/** French and English flags; the language picked is remembered (see i18n). */
+function LanguagePicker() {
+  const { t, i18n } = useTranslation();
+  return (
+    <ToggleGroup.Root
+      type="single"
+      className="language-picker"
+      aria-label={t("language.label")}
+      value={currentLanguage()}
+      onValueChange={(lng) => lng && void i18n.changeLanguage(lng)}
+    >
+      {LANGUAGES.map((lng) => (
+        <ToggleGroup.Item key={lng} value={lng} className="flag" aria-label={t(`language.${lng}`)} title={t(`language.${lng}`)}>
+          <Flag language={lng} />
+        </ToggleGroup.Item>
+      ))}
+    </ToggleGroup.Root>
+  );
+}
+
+function Flag({ language }: { language: Language }) {
+  if (language === "fr") {
+    return (
+      <svg viewBox="0 0 3 2" aria-hidden="true">
+        <rect width="1" height="2" fill="#002654" />
+        <rect x="1" width="1" height="2" fill="#fff" />
+        <rect x="2" width="1" height="2" fill="#ce1126" />
+      </svg>
+    );
+  }
+  // Union Jack.
+  return (
+    <svg viewBox="0 0 60 40" aria-hidden="true" preserveAspectRatio="none">
+      <clipPath id="flag-uk-quarters">
+        <path d="M30,20 h30 v20 z v20 h-30 z h-30 v-20 z v-20 h30 z" />
+      </clipPath>
+      <rect width="60" height="40" fill="#012169" />
+      <path d="M0,0 L60,40 M60,0 L0,40" stroke="#fff" strokeWidth="8" />
+      <path d="M0,0 L60,40 M60,0 L0,40" stroke="#c8102e" strokeWidth="4" clipPath="url(#flag-uk-quarters)" />
+      <path d="M30,0 v40 M0,20 h60" stroke="#fff" strokeWidth="12" />
+      <path d="M30,0 v40 M0,20 h60" stroke="#c8102e" strokeWidth="7" />
+    </svg>
+  );
+}
+
 function ZoneSelect({ zones, current, onSelect }: {
   zones: ZoneSummary[]; current: string | null; onSelect: (slug: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Select.Root value={current ?? undefined} onValueChange={onSelect}>
-      <Select.Trigger className="button zone-select" aria-label="Zone">
-        <Select.Value placeholder="Choisir une zone" />
+      <Select.Trigger className="button zone-select" aria-label={t("header.zone")}>
+        <Select.Value placeholder={t("header.chooseZone")} />
         <Select.Icon className="select-icon">▾</Select.Icon>
       </Select.Trigger>
       <Select.Portal>
@@ -90,22 +141,23 @@ function SelectItem({ value, part, children }: { value: string; part?: boolean; 
 }
 
 function NewHunt({ zoneName, count, onConfirm }: Props["newHunt"]) {
+  const { t } = useTranslation();
   return (
     <AlertDialog.Root>
       <AlertDialog.Trigger className="button new-hunt" disabled={count === 0}>
-        Nouvelle chasse
+        {t("header.newHunt")}
       </AlertDialog.Trigger>
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="dialog-overlay" />
         <AlertDialog.Content className="dialog">
-          <AlertDialog.Title className="dialog-title">Nouvelle chasse</AlertDialog.Title>
+          <AlertDialog.Title className="dialog-title">{t("header.newHunt")}</AlertDialog.Title>
           <AlertDialog.Description className="dialog-text">
-            Décocher {count > 1 ? `les ${count} cartes vérifiées` : "la carte vérifiée"} de « {zoneName} » ?
+            {t("header.newHuntConfirm", { count, zone: zoneName })}
           </AlertDialog.Description>
           <div className="dialog-actions">
-            <AlertDialog.Cancel className="button">Annuler</AlertDialog.Cancel>
+            <AlertDialog.Cancel className="button">{t("header.cancel")}</AlertDialog.Cancel>
             <AlertDialog.Action className="button primary" onClick={onConfirm}>
-              Tout décocher
+              {t("header.uncheckAll")}
             </AlertDialog.Action>
           </div>
         </AlertDialog.Content>
