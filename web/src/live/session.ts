@@ -49,6 +49,14 @@ export interface LiveState {
   location: string | null;
   /** What OCR saw last: the coordinates crop and each binarization. */
   preview: { crop: ImageData; binarized: ImageData[] } | null;
+  /** Map changes seen so far (loading screens). */
+  moves: number;
+  /**
+   * The last time the position was confirmed after a map change (or at the
+   * start): where, and after how many map changes. A new object each time,
+   * even on the same coordinates (stairs, maps stacked on one cell).
+   */
+  arrival: { position: Coords; moves: number } | null;
 }
 
 export const IDLE_STATE: LiveState = {
@@ -59,9 +67,13 @@ export const IDLE_STATE: LiveState = {
   position: null,
   preview: null,
   location: null,
+  moves: 0,
+  arrival: null,
 };
 
 const TICK_MS = 400;
+/** Loading screens between maps last 0.1-0.2 s: the game view is checked for them this often. */
+const LOADING_MS = 50;
 const LAYOUT_SAMPLES = 12;
 const LAYOUT_SAMPLE_MS = 1000;
 /** The top-left corner (location line, and the label until found) is read this often. */
@@ -99,6 +111,10 @@ export class LiveSession {
   private words: Worker | null = null;
   private ticker: Ticker | null = null;
   private cancelTick: (() => void) | null = null;
+  private cancelWatch: (() => void) | null = null;
+  /** A tiny copy of the game view, to spot loading screens. */
+  private thumb: HTMLCanvasElement | null = null;
+  private loading = false;
   /** The check in progress, so stopping can wait for its OCR jobs to end. */
   private busy: Promise<void> = Promise.resolve();
   private tracker = new PositionTracker();
@@ -153,11 +169,15 @@ export class LiveSession {
     this.update({ status: "running", message: null });
     this.ticker = new Ticker();
     this.schedule();
+    this.watchLoading();
   }
 
   stop() {
     this.cancelTick?.();
     this.cancelTick = null;
+    this.cancelWatch?.();
+    this.cancelWatch = null;
+    this.loading = false;
     this.ticker?.close();
     this.ticker = null;
     this.stream?.getTracks().forEach((t) => t.stop());
@@ -215,6 +235,27 @@ export class LiveSession {
         console.error(e);
       }
       if (this.stream) this.schedule();
+    });
+  }
+
+  /** Counts map changes: each loading screen (a dark game view) is one. */
+  private watchLoading() {
+    if (!this.ticker) return;
+    this.cancelWatch = this.ticker.after(LOADING_MS, () => {
+      const video = this.video;
+      if (this.state.status === "running" && video?.videoWidth && this.game) {
+        const { x, y, w, h } = this.game;
+        this.thumb ??= canvas(32, 18);
+        const ctx = this.thumb.getContext("2d", { willReadFrequently: true })!;
+        ctx.drawImage(video, x, y, w, h, 0, 0, 32, 18);
+        const loading = isLoadingFrame({ small: toGray(ctx.getImageData(0, 0, 32, 18)).data });
+        if (loading && !this.loading) {
+          this.tracker.moved();
+          this.update({ moves: this.state.moves + 1 });
+        }
+        this.loading = loading;
+      }
+      if (this.stream) this.watchLoading();
     });
   }
 
@@ -311,8 +352,9 @@ export class LiveSession {
       current,
       this.around.zoneMaps,
     );
-    this.tracker.push(value);
+    const confirmed = this.tracker.push(value);
     this.update({
+      ...(confirmed ? { arrival: { position: confirmed, moves: this.state.moves } } : {}),
       readings: texts,
       position: this.tracker.current,
       preview: { crop, binarized: binarized.map(toImageData) },

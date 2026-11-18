@@ -43,7 +43,7 @@ export function frameEdges(gray: GrayImage): FrameEdges {
   return { width: w, height: h, small: resizeArea(gray, 64, 36).data, cols, rowBlocks };
 }
 
-export function isLoadingFrame(frame: FrameEdges): boolean {
+export function isLoadingFrame(frame: Pick<FrameEdges, "small">): boolean {
   return mean(frame.small) < 25;
 }
 

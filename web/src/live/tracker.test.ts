@@ -31,3 +31,13 @@ test("jumps to non-adjacent maps need more reads", () => {
   t.push([9, 10]);
   expect(t.push([9, 10])).toEqual([9, 10]); // adjacent: 2 reads
 });
+
+test("after a map change, the same coordinates are confirmed again: stairs", () => {
+  const t = new PositionTracker({ stableReads: 2, jumpReads: 4 });
+  t.push([0, 0]);
+  t.push([0, 0]);
+  t.moved();
+  expect(t.push([0, 0])).toBeNull();
+  expect(t.push([0, 0])).toEqual([0, 0]);
+  expect(t.push([0, 0])).toBeNull(); // then it's current again
+});
