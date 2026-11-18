@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { binarize, OCR_HEIGHT, parseCoords, readingValue, repairReading, tally } from "./ocr";
+import { binarize, decodeText, OCR_HEIGHT, parseCoords, readingValue, tally } from "./ocr";
 
 test("parse coordinates", () => {
   expect(parseCoords("-26,-57")).toEqual([-26, -57]);
@@ -46,19 +46,33 @@ test("binarize gives dark text on white at the OCR height", () => {
 });
 
 
-test("readings one OCR slip away from a map next to the player are repaired", () => {
-  const forest = new Set(["-5,17", "-5,18", "-5,19", "-6,18", "-7,17", "-7,18"]);
-  // A light ray read as a 1 (Forêt maléfique [-5,18]).
-  expect(repairReading([-5, 118], [-5, 17], forest)).toEqual([-5, 18]);
-  // The minus sign lost ([-7,17]).
-  expect(repairReading([7, 17], [-7, 18], forest)).toEqual([-7, 17]);
-  // Already a map of the zones, or next to the player: as read.
-  expect(repairReading([-5, 19], [-5, 18], forest)).toEqual([-5, 19]);
-  expect(repairReading([7, 17], [7, 18], forest)).toEqual([7, 17]); // on the surface, next to the player
-  // Far from the player, or no position yet: as read.
-  expect(repairReading([-5, 118], [-20, 30], forest)).toEqual([-5, 118]);
-  expect(repairReading([-5, 118], null, forest)).toEqual([-5, 118]);
-  // Applied to a capture's readings.
-  expect(readingValue([[-5, 118], [-5, 18]], [-5, 17], forest)).toEqual([-5, 18]);
-  expect(readingValue([[7, 17], [7, 17]], [-7, 18], forest)).toEqual([-7, 17]);
+test("texts are matched to the maps reachable from the player's", () => {
+  // Forêt maléfique, around [-5,18], [-7,17], [-1,17] and the [0,22] dead end.
+  const zoneMaps = new Set(["-5,17", "-5,18", "-5,19", "-6,18", "-7,17", "-7,18", "-1,17", "-1,18", "0,21", "0,22"]);
+  const neighbours = new Map<string, Set<string>>([
+    ["-5,17", new Set(["-5,18"])],
+    ["-5,18", new Set(["-5,17", "-5,19", "-6,18"])],
+    ["-7,18", new Set(["-7,17"])],
+    ["-1,18", new Set(["-1,17"])],
+    ["0,21", new Set(["0,22"])],
+    ["0,22", new Set(["0,21"])],
+  ]);
+  const around = { zoneMaps, neighbours };
+  // A light ray read as a 1, a minus sign, a comma or a digit lost.
+  expect(decodeText("-5,118", [-5, 17], around)).toEqual([-5, 18]);
+  expect(decodeText("7,17", [-7, 18], around)).toEqual([-7, 17]);
+  expect(decodeText("-117", [-1, 18], around)).toEqual([-1, 17]);
+  expect(decodeText("0,222", [0, 21], around)).toEqual([0, 22]);
+  // Two reachable maps as close: as read.
+  expect(decodeText("-1,11", [-1, 18], around)).toEqual([-1, 11]);
+  expect(decodeText("0,2", [0, 21], around)).toEqual([0, 2]);
+  // A zone map read exactly, or the surface next to the player: as read.
+  expect(decodeText("-5,19", [-5, 18], around)).toEqual([-5, 19]);
+  expect(decodeText("-5,17", [-5, 18], around)).toEqual([-5, 17]);
+  expect(decodeText("7,17", [7, 18], around)).toEqual([7, 17]);
+  // Far from anything reachable, or no position yet: as read.
+  expect(decodeText("4,-18", [-5, 18], around)).toEqual([4, -18]);
+  expect(decodeText("-5,118", null, around)).toEqual([-5, 118]);
+  // Off the passages: the zone maps next to the player.
+  expect(decodeText("-5,118", [-4, 18], around)).toEqual([-5, 18]);
 });

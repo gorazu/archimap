@@ -95,36 +95,58 @@ export function tally(readings: (Coords | null)[]): { coords: Coords; share: num
     .map(({ coords, n }) => ({ coords, share: n / readings.length }));
 }
 
-/** Readings one OCR slip away: a digit too many (a light ray read as a 1), or a minus sign lost or added. */
-function slips([x, y]: Coords): Coords[] {
-  const variants = (n: number) => {
-    const digits = String(Math.abs(n));
-    const sign = n < 0 ? -1 : 1;
-    const out = [-n];
-    for (let i = 0; i < digits.length && digits.length > 1; i++) {
-      out.push(sign * Number(digits.slice(0, i) + digits.slice(i + 1)));
+/** Edits (insert, delete, replace a character) between two strings. */
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
     }
-    return out;
-  };
-  return [...variants(x).map((v): Coords => [v, y]), ...variants(y).map((v): Coords => [x, v])];
+    prev = row;
+  }
+  return prev[b.length];
+}
+
+export interface Surroundings {
+  /** Map keys of every zone. */
+  zoneMaps: ReadonlySet<string>;
+  /** Maps a passage leads to from each map, as keys (both ways). */
+  neighbours: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+/** Where the player can be one move from the current map: there, or a map a passage leads to. */
+function reachable(current: Coords, { zoneMaps, neighbours }: Surroundings): string[] {
+  const key = coordsKey(current);
+  const linked = neighbours.get(key);
+  if (linked) return [key, ...linked];
+  // Off the zones' passages (on the surface): the zone maps next to it.
+  const [x, y] = current;
+  return [key, ...([[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]] as Coords[]).map(coordsKey).filter((k) => zoneMaps.has(k))];
 }
 
 /**
- * Repair a reading that is no map of the zones but one OCR slip away from
- * the current map or a map next to it ("-5,118" for -5,18, "7,17" for
- * -7,17). Only then: a reading next to the current position is taken as
- * read, and off the zones (on the surface) any coordinates are possible.
+ * The map one OCR text names. The player walks one map at a time, so the
+ * text is matched against the maps reachable from the current one: the
+ * closest within two character slips wins ("-5,118" for -5,18 with a light
+ * ray read as a 1, "7,17" for -7,17, "-117" for -1,17). A map of the zones
+ * read exactly, or coordinates next to the player (out on the surface),
+ * stand as read. Otherwise, or with no position yet, the coordinates read.
  */
-export function repairReading(reading: Coords, current: Coords | null, zoneMaps: ReadonlySet<string>): Coords {
-  if (!current || zoneMaps.has(coordsKey(reading))) return reading;
-  if (coordsKey(reading) === coordsKey(current) || isAdjacent(reading, current)) return reading;
-  const near = new Map(
-    slips(reading)
-      .filter((c) => zoneMaps.has(coordsKey(c)) && (coordsKey(c) === coordsKey(current) || isAdjacent(c, current)))
-      .map((c) => [coordsKey(c), c]),
-  );
+export function decodeText(text: string, current: Coords | null, around: Surroundings): Coords | null {
+  const read = parseCoords(text);
+  if (!current) return read;
+  const candidates = new Set(reachable(current, around));
+  if (read && (around.zoneMaps.has(coordsKey(read)) || isAdjacent(read, current))) candidates.add(coordsKey(read));
+  const clean = text.replace(/[−–—]/g, "-").replace(/\s+/g, "");
+  const scored = [...candidates]
+    .map((key) => ({ key, d: editDistance(clean, key) }))
+    .sort((a, b) => a.d - b.d);
+  const [best, second] = scored;
+  const limit = best && best.key.length >= 4 ? 2 : 1;
   // Only when there's no doubt about which.
-  return near.size === 1 ? [...near.values()][0] : reading;
+  if (best && best.d <= limit && (!second || second.d > best.d)) return best.key.split(",").map(Number) as Coords;
+  return read;
 }
 
 /**
@@ -138,7 +160,7 @@ export function readingValue(
   current: Coords | null,
   zoneMaps: ReadonlySet<string> = new Set(),
 ): Coords | null {
-  const candidates = tally(readings.map((r) => r && repairReading(r, current, zoneMaps)));
+  const candidates = tally(readings);
   if (candidates.length === 0) return null;
   if (candidates.length === 1) return candidates[0].coords;
   if (current) {

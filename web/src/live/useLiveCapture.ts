@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { Surroundings } from "./ocr";
 import { IDLE_STATE, LiveSession, type LiveState } from "./session";
 import { DEFAULT_TRACKER_OPTIONS, type TrackerOptions } from "./tracker";
 
@@ -21,15 +22,15 @@ function loadOptions(): LiveOptions {
   return DEFAULT_OPTIONS;
 }
 
-/** @param knownMaps Map keys of every zone, to settle readings that disagree. */
-export function useLiveCapture(knownMaps: ReadonlySet<string>) {
+/** @param around Maps of every zone and their passages, to settle readings. */
+export function useLiveCapture(around: Surroundings) {
   const [state, setState] = useState<LiveState>(IDLE_STATE);
   const [options, setOptions] = useState<LiveOptions>(loadOptions);
   const sessionRef = useRef<LiveSession | null>(null);
   sessionRef.current ??= new LiveSession(setState);
   const session = sessionRef.current;
 
-  useEffect(() => session.setZoneMaps(knownMaps), [session, knownMaps]);
+  useEffect(() => session.setSurroundings(around), [session, around]);
   useEffect(() => {
     session.setOptions(options);
     try {

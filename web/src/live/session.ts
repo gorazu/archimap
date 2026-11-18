@@ -17,7 +17,7 @@ import {
   type OcrWord,
 } from "./layout";
 import { parseLocation } from "./location";
-import { binarize, parseCoords, readingValue, TEXT_VARIANTS, type Coords } from "./ocr";
+import { binarize, decodeText, readingValue, TEXT_VARIANTS, type Coords, type Surroundings } from "./ocr";
 import { Ticker } from "./ticker";
 import { PositionTracker, type TrackerOptions } from "./tracker";
 
@@ -96,7 +96,7 @@ export class LiveSession {
   /** The check in progress, so stopping can wait for its OCR jobs to end. */
   private busy: Promise<void> = Promise.resolve();
   private tracker = new PositionTracker();
-  private zoneMaps: ReadonlySet<string> = new Set();
+  private around: Surroundings = { zoneMaps: new Set(), neighbours: new Map() };
 
   private edges: FrameEdges[] = [];
   private game: Box | null = null;
@@ -112,8 +112,8 @@ export class LiveSession {
     this.tracker.setOptions(options);
   }
 
-  setZoneMaps(keys: ReadonlySet<string>) {
-    this.zoneMaps = keys;
+  setSurroundings(around: Surroundings) {
+    this.around = around;
   }
 
   async start() {
@@ -299,7 +299,12 @@ export class LiveSession {
       const { data } = await digits.recognize(toCanvas(img));
       texts.push(data.text.replace(/\s+/g, ""));
     }
-    const value = readingValue(texts.map(parseCoords), this.tracker.current, this.zoneMaps);
+    const current = this.tracker.current;
+    const value = readingValue(
+      texts.map((t) => decodeText(t, current, this.around)),
+      current,
+      this.around.zoneMaps,
+    );
     this.tracker.push(value);
     this.update({
       readings: texts,

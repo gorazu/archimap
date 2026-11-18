@@ -4,7 +4,8 @@ import { Header } from "./components/Header";
 import { LivePanel } from "./components/LivePanel";
 import { ZoneMap } from "./components/ZoneMap";
 import {
-  fetchZone, fetchZoneIndex, isSelection, mapKey, partOf, splitSelection, zonePart, type Zone, type ZoneSummary,
+  fetchZone, fetchZoneIndex, isSelection, mapKey, partOf, splitSelection, walkableNeighbours, zonePart, type Zone,
+  type ZoneSummary,
 } from "./data/zones";
 import {
   buildGraph, describePosition, guideFrom, locate, planEntrances, routeProgress,
@@ -153,7 +154,11 @@ export function App() {
     [zones, zoneData],
   );
   const knownMaps = useMemo(() => new Set(lookups.flatMap((z) => [...z.maps])), [lookups]);
-  const live = useLiveCapture(knownMaps);
+  const around = useMemo(
+    () => ({ zoneMaps: knownMaps, neighbours: walkableNeighbours([...(zoneData?.values() ?? [])]) }),
+    [knownMaps, zoneData],
+  );
+  const live = useLiveCapture(around);
   const [liveOpen, setLiveOpen] = useState(false);
   const { position, location: gameLocation } = live.state;
   const positionKey = position ? mapKey(position[0], position[1]) : null;

@@ -87,6 +87,26 @@ export function zoneLinks(zone: Zone): [number, number, number, number][] {
   );
 }
 
+/** Maps each map's passages lead to, both ways, as keys: where the player can walk next. */
+export function walkableNeighbours(zones: Zone[]): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  const link = (a: string, b: string) => {
+    if (!out.has(a)) out.set(a, new Set());
+    out.get(a)!.add(b);
+  };
+  for (const zone of zones) {
+    const pairs = [
+      ...zoneLinks(zone).map(([x1, y1, x2, y2]) => [mapKey(x1, y1), mapKey(x2, y2)]),
+      ...(zone.passages ?? []).map(({ a, b }) => [mapKey(a[0], a[1]), mapKey(b[0], b[1])]),
+    ];
+    for (const [a, b] of pairs) {
+      link(a, b);
+      link(b, a);
+    }
+  }
+  return out;
+}
+
 export interface ZoneEntrance {
   x: number;
   y: number;
