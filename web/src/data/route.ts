@@ -5,7 +5,7 @@
 // a travelling salesman problem); greedy nearest-map walks from every start,
 // improved by reversing stretches of the visiting order (2-opt) and moving
 // single maps in it (or-opt), get close.
-import { mapKey, zoneLinks, type Zone, type ZoneEntrance } from "./zones";
+import { countedMaps, mapKey, zoneLinks, type Zone, type ZoneEntrance } from "./zones";
 
 export interface RouteNode {
   map: string; // "x,y"
@@ -32,8 +32,10 @@ export interface ZoneGraph {
 export interface Route {
   steps: RouteStep[];
   start: number;
-  /** Maps visited, in order of first visit. */
+  /** Maps to visit, in order of first visit (maps only walked through aren't goals). */
   order: string[];
+  /** Maps walked over, goals or not. */
+  walked: number;
   /** Maps to visit that can't be reached from the start inside the zone. */
   unreachable: string[];
 }
@@ -232,11 +234,14 @@ function expand(g: ZoneGraph, tour: number[], targets: Set<string>): Route {
     for (let k = 1; k < path.length; k++) steps.push(g.edges.get(path[k - 1])!.get(path[k])!);
   }
   const order: string[] = [];
+  const walked = new Set<string>();
   for (const node of [tour[0], ...steps.map((s) => s.to)]) {
-    if (!order.includes(g.nodes[node].map)) order.push(g.nodes[node].map);
+    walked.add(g.nodes[node].map);
+    const map = g.nodes[node].map;
+    if (targets.has(map) && !order.includes(map)) order.push(map);
   }
   const unreachable = [...targets].filter((m) => !order.includes(m)).sort();
-  return { steps, start: tour[0], order, unreachable };
+  return { steps, start: tour[0], order, walked: walked.size, unreachable };
 }
 
 /**
@@ -308,7 +313,8 @@ export interface EntranceRoute {
  * then comes from the maps checked (routeProgress), not from replanning.
  */
 export function planEntrances(zone: Zone, g: ZoneGraph, tries = 200): EntranceRoute[] {
-  const targets = new Set(zone.maps.map((m) => mapKey(m.x, m.y)));
+  // Maps with nothing to check (a village on the way) are only walked through.
+  const targets = new Set(countedMaps(zone).map((m) => mapKey(m.x, m.y)));
   const results: EntranceRoute[] = [];
   for (const [k, entrance] of (zone.entrances ?? []).entries()) {
     const map = mapKey(entrance.x, entrance.y);

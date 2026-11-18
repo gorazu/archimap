@@ -42,7 +42,8 @@ test("a route is drawn from sun to sun and numbered in visiting order", () => {
   const route = planRoute(graph, new Set(["1,0"]), [start])!;
   const shapes = routeShapes(z, graph, route);
   expect(shapes.line.map((pt) => pt.map(Math.round))).toEqual([[-50, 50], [-50, 90], [-50, 110]]);
-  expect(shapes.numbers.map((n) => [n.map, n.label])).toEqual([["0,0", "1"], ["1,0", "2"]]);
+  // Only maps to visit are numbered: the start isn't one here.
+  expect(shapes.numbers.map((n) => [n.map, n.label])).toEqual([["0,0", ""], ["1,0", "1"]]);
 });
 
 

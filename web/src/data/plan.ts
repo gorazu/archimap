@@ -73,7 +73,8 @@ export function routeShapes(zone: Zone, graph: ZoneGraph, route: Route, start?: 
   const startPoint = start ? tilePoint(first.x, first.y, start, zone.tile_size) : nodePoint(route.start);
   const line = [startPoint];
   const arrivals = [0];
-  const numbers = [{ map: first.map, label: "1", position: startPoint }];
+  // The start is numbered when it's a map to visit (not a village walked through, say).
+  const numbers = [{ map: first.map, label: route.order[0] === first.map ? "1" : "", position: startPoint }];
   const seen = new Set([first.map]);
   let entered = start;
   for (const step of route.steps) {
@@ -83,9 +84,10 @@ export function routeShapes(zone: Zone, graph: ZoneGraph, route: Route, start?: 
     arrivals.push(line.length);
     line.push(arrival);
     entered = step.enter;
-    if (!seen.has(to.map)) {
+    // Numbered where first reached; maps only walked through (nothing to check) aren't.
+    if (!seen.has(to.map) && route.order.includes(to.map)) {
       seen.add(to.map);
-      numbers.push({ map: to.map, label: String(seen.size), position: arrival });
+      numbers.push({ map: to.map, label: String(route.order.indexOf(to.map) + 1), position: arrival });
     }
   }
   return { line, arrivals, numbers };
@@ -154,15 +156,17 @@ function between(a: UV, b: UV, p: UV): boolean {
 }
 
 /**
- * The shortest way between two suns along the map's drawn paths, so the
- * walk follows them; null when they aren't joined by them.
+ * The shortest way between two points along the map's drawn paths, so the
+ * walk follows them: from each point to the path nearest to it (a sun the
+ * paths don't reach, say, next to one they do), then along the paths. Null
+ * when the paths don't join them.
  */
 export function alongPaths(m: MapEntry, from: UV, to: UV, [w, h]: [number, number]): UV[] | null {
   const { points, next } = pathGraph(m);
   const nearest = (p: UV) => {
     let best = -1;
     points.forEach((q, i) => {
-      if (dist2(p, q) < 0.0004 && (best === -1 || dist2(p, q) < dist2(p, points[best]))) best = i;
+      if (dist2(p, q) < 0.04 && (best === -1 || dist2(p, q) < dist2(p, points[best]))) best = i;
     });
     return best;
   };
@@ -193,5 +197,7 @@ export function alongPaths(m: MapEntry, from: UV, to: UV, [w, h]: [number, numbe
   if (!best.has(goal)) return null;
   const path = [goal];
   while (path[path.length - 1] !== start) path.push(previous.get(path[path.length - 1])!);
-  return path.reverse().map((i) => points[i]);
+  const along = path.reverse().map((i) => points[i]);
+  // From and to themselves stay the ends, even when off the paths.
+  return [from, ...along.filter((p, i) => !(i === 0 && dist2(p, from) < 1e-6) && !(i === along.length - 1 && dist2(p, to) < 1e-6)), to];
 }
