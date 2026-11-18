@@ -82,7 +82,7 @@ def test_a_sun_near_a_corner_leads_off_its_closest_edge():
     # Égouts de Bonta [-34,-56]: the sun 1 from the top, 3 from the left
     # leads up; the one 1 from the left, 3 from the bottom leads left.
     areas = map_areas(variables({(3, 1): cell(SUN), (1, 29): cell(SUN)}))
-    assert sorted((e.side, e.uv) for a in areas for e in a.exits) == [("left", (0.036, 0.906)), ("top", (0.107, 0.031))]
+    assert sorted((e.side, e.uv) for a in areas for e in a.exits) == [("left", (0.067, 0.882)), ("top", (0.133, 0.059))]
     # As close to both edges: counts on both.
     areas = map_areas(variables({(1, 1): cell(SUN)}))
     assert sorted(e.side for a in areas for e in a.exits) == ["left", "top"]
@@ -136,9 +136,11 @@ def test_routes_follow_the_floor_around_a_wall():
     wall = {(x, y): cell(WALL) for x in (13, 14, 15) for y in range(0, 25) if (x + y) % 2 == 0}
     suns = {(6, 0): cell(SUN), (22, 0): cell(SUN)}
     (area,) = map_areas(variables({**wall, **suns}))
-    (route,) = area.paths
-    assert route[0] in ((round(6 / 28, 3), 0.0), (round(22 / 28, 3), 0.0))
-    assert max(v for _, v in route) > 24 / 32  # went below the wall
+    # From each sun to where they meet, below the wall.
+    left, right = sorted(area.paths)
+    assert left[0] == (round(7 / 30, 3), round(1 / 34, 3)) and right[0] == (round(23 / 30, 3), round(1 / 34, 3))
+    assert left[-1] == right[-1]
+    assert max(v for route in area.paths for _, v in route) > 25 / 34  # went below the wall
 
 
 def test_single_exit_part_gets_a_dead_end_route():
