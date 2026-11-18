@@ -1,6 +1,12 @@
 {
   "zones": [
     {
+      "zone": "caverne-des-fungus",
+      "name": "Caverne des Fungus",
+      "maps": 30,
+      "subarea": "Caverne des Fungus"
+    },
+    {
       "zone": "foret-malefique",
       "name": "Forêt maléfique",
       "maps": 77,

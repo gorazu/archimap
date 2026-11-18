@@ -6,15 +6,17 @@ layer: zones differ) on an edge of the map mean a passage to the
 neighbouring map on that side; inside a closed room (ladder,
 door), their direction from the room's centre is used instead.
 
-Only unencrypted map files are read: the client ships older plain versions
-alongside the current encrypted ones ("..X.swf"). Maps without one fall
-back to being joined to all their neighbours. Checked on Égouts de Bonta:
-every one of the 83 passages walked in the recording is found.
+The client ships older plain versions alongside the current encrypted ones
+("..X.swf"): the plain one is read. A map with only an encrypted file is
+decrypted (see map_keys); with no file at all, it falls back to being
+joined to all its neighbours. Checked on Égouts de Bonta: every one of the
+83 passages walked in the recording is found.
 """
 
 from __future__ import annotations
 
 import collections
+import functools
 
 import glob
 import os
@@ -28,10 +30,11 @@ Coords = tuple[int, int]
 Link = tuple[Coords, Coords]
 
 _HASH = {c: i for i, c in enumerate("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")}
-# Movement type of the cells that change map, and the sun graphic drawn on
-# them. Some zones only set one of the two, on either object layer.
+# Movement type of the cells that change map, and the sun graphics drawn on
+# them (4088 in Caverne des Fungus). Some zones only set one of the two, on
+# either object layer.
 TRIGGER_MOVEMENT = 2
-SUN_GRAPHIC = 1030
+SUN_GRAPHICS = {1030, 4088}
 # Triggers this close to an edge (in half-cells) lead through that edge.
 EDGE_MARGIN = 4
 SIDES = {"right": (1, 0), "left": (-1, 0), "bottom": (0, 1), "top": (0, -1)}
@@ -55,6 +58,31 @@ def plain_map_file(maps_dir: Path, map_id: int) -> Path | None:
     """Newest unencrypted file of a map, if the client has one."""
     files = sorted(p for p in maps_dir.glob(f"{map_id}_*.swf") if not p.stem.endswith("X"))
     return files[-1] if files else None
+
+
+def zone_variables(maps_dir: Path, map_ids) -> dict[int, dict[str, object]]:
+    """Map files' variables, for the maps of a zone: each newest plain
+    file's, else its newest encrypted one's with the cells decrypted (see
+    map_keys). Maps without a file (or a key) are left out."""
+    return dict(_zone_variables(maps_dir, frozenset(map_ids)))
+
+
+@functools.lru_cache(maxsize=16)
+def _zone_variables(maps_dir: Path, map_ids: frozenset[int]) -> tuple[tuple[int, dict[str, object]], ...]:
+    found, encrypted = {}, {}
+    for i in sorted(map_ids):
+        plain = plain_map_file(maps_dir, i)
+        if plain:
+            found[i] = swf_variables(plain)
+        elif files := sorted(maps_dir.glob(f"{i}_*X.swf")):
+            encrypted[i] = swf_variables(files[-1])
+    if encrypted:
+        from .map_keys import model_from_maps, zone_map_data
+
+        texts = zone_map_data({i: str(v["mapData"]) for i, v in encrypted.items()},
+                              [str(v["mapData"]) for v in found.values()], model_from_maps(maps_dir))
+        found |= {i: {**v, "mapData": texts[i]} for i, v in encrypted.items() if texts[i]}
+    return tuple(found.items())
 
 
 def swf_variables(path: Path) -> dict[str, object]:
@@ -179,7 +207,7 @@ def read_cells(variables: dict[str, object]) -> tuple[dict[tuple[int, int], tupl
         active, movement = (c[0] & 32) >> 5, (c[2] & 56) >> 3
         layer1 = ((c[0] & 4) << 11) + ((c[4] & 1) << 12) + (c[5] << 6) + c[6]
         layer2 = ((c[0] & 2) << 12) + ((c[7] & 1) << 12) + (c[8] << 6) + c[9]
-        sun = bool(active and movement == TRIGGER_MOVEMENT) or SUN_GRAPHIC in (layer1, layer2)
+        sun = bool(active and movement == TRIGGER_MOVEMENT) or not SUN_GRAPHICS.isdisjoint((layer1, layer2))
         pair, rest = divmod(cell_id, 2 * width - 1)
         pos = (rest * 2, pair * 2) if rest < width else ((rest - width) * 2 + 1, pair * 2 + 1)
         cells[pos] = (bool(active and movement != 0) or sun, sun)
@@ -320,8 +348,7 @@ def main_maps(maps: dict[Coords, list[int]], maps_dir: Path, chosen: dict[Coords
     size, then the lowest id; `chosen` picks it by hand. Others are kept for
     their passages only when they reach a neighbour the main one doesn't;
     rooms with only a ladder become ways in."""
-    files = {i: plain_map_file(maps_dir, i) for ids in maps.values() for i in ids}
-    variables = {i: swf_variables(f) for i, f in files.items() if f}
+    variables = zone_variables(maps_dir, (i for ids in maps.values() for i in ids))
     areas_of = {i: map_areas(v) for i, v in variables.items()}
     exits = {i: [e for a in areas_of[i] for e in a.exits] for i in variables}
     sides_at = {xy: {e.side for i in ids if i in exits for e in exits[i] if not e.inner} for xy, ids in maps.items()}
@@ -360,12 +387,13 @@ def read_areas(maps: dict[Coords, list[int]], maps_dir: Path) -> tuple[dict[Coor
     maps that had no readable map file."""
     areas: dict[Coords, list[Area]] = {}
     unreadable = set()
+    variables = zone_variables(maps_dir, (i for ids in maps.values() for i in ids))
     for coords, map_ids in maps.items():
-        files = [f for f in (plain_map_file(maps_dir, i) for i in map_ids) if f]
-        if not files:
+        found = [variables[i] for i in map_ids if i in variables]
+        if not found:
             unreadable.add(coords)
             continue
-        areas[coords] = [a for f in files for a in map_areas(swf_variables(f))]
+        areas[coords] = [a for v in found for a in map_areas(v)]
     return areas, unreadable
 
 
@@ -553,7 +581,7 @@ def map_layout(variables: dict[str, object]) -> dict[str, object]:
         active, movement = (c[0] & 32) >> 5, (c[2] & 56) >> 3
         layer1 = ((c[0] & 4) << 11) + ((c[4] & 1) << 12) + (c[5] << 6) + c[6]
         layer2 = ((c[0] & 2) << 12) + ((c[7] & 1) << 12) + (c[8] << 6) + c[9]
-        if (active and movement == TRIGGER_MOVEMENT) or SUN_GRAPHIC in (layer1, layer2):
+        if (active and movement == TRIGGER_MOVEMENT) or not SUN_GRAPHICS.isdisjoint((layer1, layer2)):
             values.append(3)
         elif not active:
             values.append(0)
@@ -569,10 +597,11 @@ def read_layouts(maps: dict[Coords, list[int]], maps_dir: Path) -> dict[Coords, 
     """Layout of each map that has a readable file (the first one, when
     several maps share a cell)."""
     layouts = {}
+    variables = zone_variables(maps_dir, (i for ids in maps.values() for i in ids))
     for coords, map_ids in maps.items():
-        path = next((f for f in (plain_map_file(maps_dir, i) for i in map_ids) if f), None)
-        if path:
-            layouts[coords] = map_layout(swf_variables(path))
+        found = next((variables[i] for i in map_ids if i in variables), None)
+        if found:
+            layouts[coords] = map_layout(found)
     return layouts
 
 

@@ -4,7 +4,7 @@ Interactive map of Dofus Retro zones (sewers, underground passages, labyrinth fo
 
 Zones are built from the **Dofus Retro client's own files**: the list of maps of each sub-area with their coordinates, and each map's layout (floor, walls and the suns that lead to the next map). A gameplay recording can be added on top, to confirm passages or to cover maps the client can't read.
 
-Current zones: Égouts de Bonta, Égouts de Brâkmar, Forêt maléfique, Sanctuaire des Dragoeufs, Sous-terrain des Dragoeufs, and Souterrains d'Astrub (Souterrain d'Astrub, Souterrain profond d'Astrub and Souterrain du Château d'Amakna, checked as one zone).
+Current zones: Caverne des Fungus, Égouts de Bonta, Égouts de Brâkmar, Forêt maléfique, Sanctuaire des Dragoeufs, Sous-terrain des Dragoeufs, and Souterrains d'Astrub (Souterrain d'Astrub, Souterrain profond d'Astrub and Souterrain du Château d'Amakna, checked as one zone).
 
 ## Setup
 
@@ -40,10 +40,10 @@ What comes from the client:
 
 - **Maps:** every map of the sub-area, by coordinates. Sub-areas where many maps share the same coordinates (Souterrain d'Amakna, Grotte Hesque, Village des Dragoeufs…) can't be used: Archimap tells maps apart by their coordinates, and the plan would show far fewer tiles than the zone has maps.
 - **Maps sharing coordinates:** a few coordinates hold several game maps (versions of the same map, or a small room with a ladder from the surface). One is drawn: the one whose suns best match its neighbours'. Another is kept for linking only if it reaches a neighbour the drawn one doesn't, and a ladder room under a surface map becomes an entrance. `"main_maps": {"-22,32": 6744}` in the zone's file picks the drawn map by hand.
-- **Passages:** from the **suns** in each map's file. A sun on a map's edge is a passage to the neighbouring map on that side, when that map has an exit back; ladders and doors inside closed rooms count too. A sun near a corner leads off its closest edge (one 1 cell from the top and 3 from the left leads up), and off both only when it's as close to each. On Égouts de Bonta, this finds every passage walked in a recording.
+- **Passages:** from the **suns** in each map's file. A sun (movement type 2, or the sun graphic 1030, or 4088 in Caverne des Fungus) on a map's edge is a passage to the neighbouring map on that side, when that map has an exit back; ladders and doors inside closed rooms count too. A sun near a corner leads off its closest edge (one 1 cell from the top and 3 from the left leads up), and off both only when it's as close to each. On Égouts de Bonta, this finds every passage walked in a recording.
 - **Layouts and paths:** each map's floor, walls and suns, and the walking routes between its suns. Some maps are split into separate parts, each with its own suns (the Forêt maléfique is a labyrinth); each part and each path is drawn separately.
 
-Limits: only the unencrypted map files the client ships can be read. They are older versions of the maps (2005): exits match today's game, but decoration may differ. About 16% of maps have no such file (all of Caverne des Fungus, for example); those are joined to all their neighbours instead, which is why Caverne des Fungus isn't included.
+**Encrypted map files:** the client ships older unencrypted versions of most maps (2005) next to the current encrypted ones (`…X.swf`); the unencrypted one is read when there is one. About 16% of maps only have an encrypted file (all of Caverne des Fungus, for example). Its cells are XORed with a repeating key that only the game server sends, but cell text is regular enough to work the key out from the data alone (`archimap/map_keys.py`): the key length and each key byte are the ones giving the most likely cells, as seen in the client's readable maps, then in the zone's own maps. Checked on maps that also have a readable version, nearly all decrypt to it; a few key bytes can still be wrong, mostly when the key length is a multiple of 10 (each key byte then only covers one place in the cells). Maps without any file are joined to all their neighbours.
 
 ### Zones made of several sub-areas
 
