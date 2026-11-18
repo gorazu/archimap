@@ -163,6 +163,9 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
         for map_id, coords in client.maps[subarea]:
             by_coords.setdefault(coords, []).append(map_id)
             subarea_of[coords] = client.subareas[subarea][0]
+    # Maps left out by hand ("remove_maps"): no monsters there, nothing to check.
+    removed = {tuple(c) for c in config.get("remove_maps", [])}
+    by_coords = {c: ids for c, ids in by_coords.items() if c not in removed}
     cells = set(by_coords)
     name = config.get("name") or client.subareas[subareas[0]][0]
     notes = []
@@ -177,15 +180,16 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
     passages += added_passages(config, areas)
     suns = {(p.a[0], p.b[0]) for p in passages}
     if existing:
-        maps = list(existing["maps"])
+        maps = [m for m in existing["maps"] if (m["x"], m["y"]) not in removed]
         recorded = {(m["x"], m["y"]) for m in maps if m["source"] != "client"}
         added = sorted(cells - {(m["x"], m["y"]) for m in maps})
         maps += [{"x": x, "y": y, "source": "client"} for x, y in added]
         # Passages walked in a recording; older recorded zones only have "links".
         # Zones built from the client alone have none: their passages are rebuilt.
         route = existing.get("route_links", existing.get("links", []) if recorded else [])
-        links = {((l[0], l[1]), (l[2], l[3])) for l in route}
-        from_video = sum(m["source"] != "client" for m in existing["maps"])
+        links = {((l[0], l[1]), (l[2], l[3])) for l in route
+                 if (l[0], l[1]) not in removed and (l[2], l[3]) not in removed}
+        from_video = sum(m["source"] != "client" for m in maps)
         notes.append(f"{len(added)} map(s) added to the {from_video} recorded ones" if from_video
                      else f"{len(maps)} maps")
         zone = {**existing, "name": name, "maps": maps}
@@ -195,6 +199,8 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
         zone = {"zone": slug, "name": name, "source_video": None,
                 "tile_size": DEFAULT_TILE_SIZE, "maps": maps}
         notes.append(f"{len(maps)} maps")
+    if removed:
+        notes.append(f"{len(removed)} map(s) removed")
     all_cells = {(m["x"], m["y"]) for m in zone["maps"]}
     # Walkable areas (as tile positions) and the passages between them, for
     # the plan: some maps are split into parts reached through different suns.
@@ -216,7 +222,9 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
     # A left-out room with a ladder is a way in when a map lies above it (another sub-area there).
     above = {coords for sid, maps in client.maps.items() if sid not in subareas for _, coords in maps}
     rooms = [Entrance(xy, 0, None, "ladder", xy) for xy in (shared.rooms if shared else []) if xy in areas and xy in above]
-    zone["entrances"] = zone_entrances(find_entrances(areas, passages) + rooms, config, client, subareas)
+    # A sun towards a removed map isn't a way in.
+    found = [e for e in find_entrances(areas, passages) + rooms if e.towards not in removed]
+    zone["entrances"] = zone_entrances(found, config, client, subareas)
     zone["passages"] = [{"a": [*p.a[0], p.a[1]], "b": [*p.b[0], p.b[1]], "t": p.t,
                          **({"ua": list(p.ua)} if p.ua else {}), **({"ub": list(p.ub)} if p.ub else {}),
                          **({"oneway": p.oneway} if p.oneway else {})}
