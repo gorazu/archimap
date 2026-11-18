@@ -1,4 +1,5 @@
 import L from "leaflet";
+import { RadioGroup, ToggleGroup } from "radix-ui";
 import { memo, useEffect, useMemo } from "react";
 import { Circle, ImageOverlay, MapContainer, Marker, Pane, Polyline, Rectangle, Tooltip, useMap, useMapEvent } from "react-leaflet";
 import { TILE_HEIGHT, tileBounds, tileWidth, zoneBounds, type Bounds } from "../data/geometry";
@@ -107,14 +108,19 @@ export function ZoneMap({
         {current && <CurrentMap key={current} zone={zone} current={current} />}
       </MapContainer>
       <div className="map-controls">
-        <div className="map-toggles">
-          <button type="button" aria-pressed={showPaths} onClick={() => onShowPathsChange(!showPaths)}>
-            Chemins
-          </button>
-          <button type="button" aria-pressed={showRoute} onClick={() => onShowRouteChange(!showRoute)}>
-            Parcours
-          </button>
-        </div>
+        <ToggleGroup.Root
+          type="multiple"
+          className="map-toggles"
+          aria-label="Affichage"
+          value={[...(showPaths ? ["paths"] : []), ...(showRoute ? ["route"] : [])]}
+          onValueChange={(shown) => {
+            onShowPathsChange(shown.includes("paths"));
+            onShowRouteChange(shown.includes("route"));
+          }}
+        >
+          <ToggleGroup.Item value="paths">Chemins</ToggleGroup.Item>
+          <ToggleGroup.Item value="route">Parcours</ToggleGroup.Item>
+        </ToggleGroup.Root>
         {showRoute && plans && plan && progress && (
           <RoutePanel plans={plans} plan={plan} progress={progress} onChoose={onChooseEntrance} />
         )}
@@ -232,27 +238,35 @@ function RoutePanel({ plans, plan, progress, onChoose }: {
   return (
     <div className="route-panel">
       {plans[0].entrance && (
-        <fieldset>
-          <legend>Entrée</legend>
-          {plans.map((p, i) => {
-            const e = p.entrance!;
-            const reach = p.route.order.length;
-            return (
-              <label key={i}>
-                <input type="radio" name="entrance" checked={p === plan} onChange={() => onChoose(p)} />
-                <span>
-                  [{e.x},{e.y}] {ENTRANCE_KIND[e.kind]}
-                  {e.to && <small> → {e.to}</small>}
-                  <br />
-                  <small>
-                    {reach < most ? `seulement ${reach} carte${reach > 1 ? "s" : ""}` : `${p.route.steps.length} déplacements`}
-                    {i === 0 && " · la plus courte"}
-                  </small>
-                </span>
-              </label>
-            );
-          })}
-        </fieldset>
+        <div className="route-entrances">
+          <div className="route-legend" id="route-entrance">Entrée</div>
+          <RadioGroup.Root
+            aria-labelledby="route-entrance"
+            value={String(plans.indexOf(plan))}
+            onValueChange={(i) => onChoose(plans[Number(i)])}
+          >
+            {plans.map((p, i) => {
+              const e = p.entrance!;
+              const reach = p.route.order.length;
+              return (
+                <label key={i} className="route-entrance">
+                  <RadioGroup.Item value={String(i)} className="radio">
+                    <RadioGroup.Indicator className="radio-dot" />
+                  </RadioGroup.Item>
+                  <span>
+                    [{e.x},{e.y}] {ENTRANCE_KIND[e.kind]}
+                    {e.to && <small> → {e.to}</small>}
+                    <br />
+                    <small>
+                      {reach < most ? `seulement ${reach} carte${reach > 1 ? "s" : ""}` : `${p.route.steps.length} déplacements`}
+                      {i === 0 && " · la plus courte"}
+                    </small>
+                  </span>
+                </label>
+              );
+            })}
+          </RadioGroup.Root>
+        </div>
       )}
       <p>
         {moves} déplacements · {repeats} retour{repeats > 1 ? "s" : ""} sur une carte déjà vue

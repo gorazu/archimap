@@ -249,14 +249,11 @@ export function App() {
     [zone, checked],
   );
 
-  // Clears the whole zone, even when showing one part of it.
-  const onNewHunt = useCallback(() => {
-    if (!fullZone) return;
-    const count = fullZone.maps.filter((m) => checked.has(mapKey(m.x, m.y))).length;
-    if (confirm(`Nouvelle chasse : décocher ${count > 1 ? `les ${count} cartes vérifiées` : "la carte vérifiée"} de « ${fullZone.name} » ?`)) {
-      reset();
-    }
-  }, [fullZone, checked, reset]);
+  // A new hunt clears the whole zone, even when showing one part of it.
+  const huntCount = useMemo(
+    () => fullZone?.maps.filter((m) => checked.has(mapKey(m.x, m.y))).length ?? 0,
+    [fullZone, checked],
+  );
 
   return (
     <div className="app">
@@ -266,7 +263,7 @@ export function App() {
         onSelectZone={setSlug}
         checkedCount={checkedCount}
         total={zone?.maps.length ?? 0}
-        onNewHunt={onNewHunt}
+        newHunt={{ zoneName: fullZone?.name ?? "", count: huntCount, onConfirm: reset }}
         live={
           LIVE_SUPPORTED
             ? { status: live.state.status, open: liveOpen, onToggle: () => setLiveOpen((open) => !open) }
