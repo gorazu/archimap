@@ -4,7 +4,7 @@ Interactive map of Dofus Retro zones (sewers, underground passages, labyrinth fo
 
 Zones are built from the **Dofus Retro client's own files**: the list of maps of each sub-area with their coordinates, and each map's layout (floor, walls and the suns that lead to the next map). A gameplay recording can be added on top, to confirm passages or to cover maps the client can't read.
 
-Current zones: Caverne des Fungus, Égouts de Bonta, Égouts de Brâkmar, Forêt maléfique, Sanctuaire des Dragoeufs, Sous-terrain des Dragoeufs, and Souterrains d'Astrub (Souterrain d'Astrub, Souterrain profond d'Astrub and Souterrain du Château d'Amakna, checked as one zone).
+Current zones: Arbre Hakam (landings stacked over the same coordinates), Caverne des Fungus, Égouts de Bonta, Égouts de Brâkmar, Forêt maléfique, Sanctuaire des Dragoeufs, Sous-terrain des Dragoeufs, and Souterrains d'Astrub (Souterrain d'Astrub, Souterrain profond d'Astrub and Souterrain du Château d'Amakna, checked as one zone).
 
 ## Setup
 
@@ -41,7 +41,7 @@ What comes from the client:
 - **Maps:** every map of the sub-area, by coordinates. Sub-areas where many maps share the same coordinates (Souterrain d'Amakna, Grotte Hesque, Village des Dragoeufs…) can't be used: Archimap tells maps apart by their coordinates, and the plan would show far fewer tiles than the zone has maps.
 - **Maps sharing coordinates:** a few coordinates hold several game maps (versions of the same map, or a small room with a ladder from the surface). One is drawn: the one whose suns best match its neighbours'. Another is kept for linking only if it reaches a neighbour the drawn one doesn't, and a ladder room under a surface map becomes an entrance. `"main_maps": {"-22,32": 6744}` in the zone's file picks the drawn map by hand.
 - **Passages:** from the **suns** in each map's file. A sun (movement type 2, or the sun graphic 1030, or 4088 in Caverne des Fungus) on a map's edge is a passage to the neighbouring map on that side, when that map has an exit back; ladders and doors inside closed rooms count too. A sun near a corner leads off its closest edge (one 1 cell from the top and 3 from the left leads up), and off both only when it's as close to each. On Égouts de Bonta, this finds every passage walked in a recording.
-- **Layouts and paths:** each map's floor, walls and suns, and the walking routes between its suns. Some maps are split into separate parts, each with its own suns (the Forêt maléfique is a labyrinth); each part and each path is drawn separately.
+- **Layouts and paths:** each map's floor, walls and suns, and the walking routes between its suns: straight lines over the floor, keeping off the walls, that meet where the suns are easiest to reach together. Some maps are split into separate parts, each with its own suns (the Forêt maléfique is a labyrinth); each part and each path is drawn separately.
 
 **Encrypted map files:** the client ships older unencrypted versions of most maps (2005) next to the current encrypted ones (`…X.swf`); the unencrypted one is read when there is one. About 16% of maps only have an encrypted file (all of Caverne des Fungus, for example). Its cells are XORed with a repeating key that only the game server sends, but cell text is regular enough to work the key out from the data alone (`archimap/map_keys.py`): the key length and each key byte are the ones giving the most likely cells, as seen in the client's readable maps, then in the zone's own maps. Checked on maps that also have a readable version, nearly all decrypt to it; a few key bytes can still be wrong, mostly when the key length is a multiple of 10 (each key byte then only covers one place in the cells). Maps without any file are joined to all their neighbours.
 
@@ -61,6 +61,25 @@ Sub-areas that lead into each other are better checked as one zone. List them as
 ```
 
 Each map keeps its game sub-area. In the web map the zone is listed with its parts below it (`#souterrains-astrub/souterrain-profond-astrub`), and every part shares the zone's progress. In live mode, the location line matches any of the parts.
+
+### Zones of landings (stacked maps)
+
+In the Arbre Hakam, up to ten maps share one `[x,y]`: the tree is a spiral of landings joined by stairs, and a stair leads to another map on the same cell. The client doesn't say which map a sun leads to (the game server knows), so the landings and the stairs come from a recording of a walk through the tree (`docs/arbre-hakam.md` tells how it was read). With `"stacked": true` the zone is built landing by landing, each like an ordinary zone, and every map keeps its id (`archimap/floors.py`):
+
+```json
+{"name": "Arbre Hakam", "stacked": true,
+ "parts": [{"client_subarea": 464, "part": "tronc"}, {"client_subarea": 472, "part": "feuillage"}],
+ "floors": [{"name": "Autour de l'arbre", "maps": [10816, 10817, ...]},
+            {"maps": [11097, 11098, 11099, 11100]},
+            ...,
+            {"name": "Village de la Canopée", "maps": [11137, 11164, ...], "check": false},
+            "rest"],
+ "walked": [[10816, 10817], [10817, 11097], ...]}
+```
+
+Landings are listed in climbing order, at most one map per cell each, and can be named. `"rest"` stands for the zone's maps not listed elsewhere (not walked yet), one landing per run of consecutive map ids. `"walked"` lists the map changes seen in the recording, by map id: between two landings they are the stairs, inside one they join maps the suns didn't. `"walked_suns"` lists, as `[map, other map, sun]`, the sun each move was seen using in the recording; it overrides the guesses for stairs and for passages inside a landing. A landing can hold maps of another sub-area with nothing to check (`"check": false`: the outside of the Village de la Canopée at the top, without its houses): it's drawn so routes can go through it, but isn't counted. Entrances are the suns out of the first landing (others with `"entrance_floors"`), only those of the maps at `"entrance_cells"` when given; `"entrances"` adds ways in by map id, such as the Village de la Canopée zaap (`{"map": 11170, "kind": "zaap", "label": "Village de la Canopée"}`, found in the client's world map hints). Routes only aim at maps to check: village maps are walked through, not visited for their own sake.
+
+In the web map, one landing is shown at a time, picked bottom left (▲ ▼ or the list, top landing first, with each one's count). A ⇅ replaces the sun each stair seen in the walk leaves by, and a click on it goes to the landing it leads to. A stair's sun is one of its map's suns that no passage on the landing uses: facing the other map when it's on a neighbouring cell, else preferably a ladder or staircase inside the map, and with several stairs from one map, the higher sun leads to the higher landing. When a map's stairs all lead to one map, its other free suns lead there too: they get a ⇅ each, and the paths inside the map only join the nearest. A stair end with no free sun takes suns paired with the same sun of a neighbour: all of them but one are the stair. Progress counts the whole zone, and the route is one walk over the whole tree, stairs included: only its part on the landing shown is drawn, numbered in the order of the whole walk. A stair the route takes is blue like it; a click on it goes to the landing it leads to. In live mode, the player is followed over the whole tree, stairs included. Each map change shows a loading screen (the game view goes dark for 0.1 to 0.2 s), which live mode watches for, so taking stairs is seen even though the coordinates stay the same. After each map change, the maps the player can be on are those that many changes away along the passages and stairs, at the coordinates read (at the start, the map with the entrance). A map is ticked once it's the only one left, and so are the maps walked through while in doubt, settled by the way back; its landing is then shown. Tested by replaying `samples/arbre-hakam.mkv` as the shared window: no map is ever ticked wrongly.
 
 ### Fixing passages
 
@@ -118,7 +137,7 @@ bun run test       # unit tests
 
 The interface is in French and English (i18next, texts in `web/src/i18n/`): the flags next to the logo switch it, and the choice is remembered with the other settings (`archimap:language`). Before any choice, the browser's language is used, English when it is neither. Zone and map names stay as the game shows them, in French.
 
-The map is a plan with one tile per map, showing the map's layout: floor, walls, suns in yellow, and on split maps each part with an exit in its own colour. Solid lines are walking routes between a map's suns, dashed lines are map changes; the **Chemins** button shows or hides them.
+The map is a plan with one tile per map, showing the map's layout: floor, walls, suns in yellow, and on split maps each part with an exit in its own colour. Solid lines are walking routes between a map's suns, dashed lines are map changes; the **Chemins** button shows or hides them. The route follows the walking routes inside each map. When a map change has a sun on one side only, it ends on the other map's floor nearest to that sun.
 
 The **Parcours** button draws a short walk through the whole zone, starting at an entrance (▶), with maps numbered in visiting order and the number of moves and of returns to a map already seen. It goes from sun to sun along each map's floor, and takes split maps into account: each part has to be reached through its own suns, and a sun leading into a split map lands in one part only (the one by the sun facing it), so some passages can only be walked one way. A walk is planned from each entrance of the zone; the panel lists them, the shortest first, and the one you pick is remembered. The walk is computed once and doesn't change as you check maps: the stretch already done is dimmed and checked maps' numbers are greyed. Maps that can't be reached from inside the zone (Sous-terrain des Dragoeufs, where you have to go back up to the surface) are counted apart and left out of the walk.
 
