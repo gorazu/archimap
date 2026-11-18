@@ -1,3 +1,4 @@
+import { Slider, Switch, Tooltip } from "radix-ui";
 import { useEffect, useRef } from "react";
 import type { LiveCapture } from "../live/useLiveCapture";
 
@@ -39,30 +40,39 @@ export function LivePanel({ live, positionZone, guide, floating, onClose }: Prop
 
       <div className="live-actions">
         {!active && state.status !== "starting" && (
-          <button type="button" className="primary" onClick={live.start}>
+          <button type="button" className="button primary" onClick={live.start}>
             Démarrer la capture
           </button>
         )}
         {state.status === "running" && (
-          <button type="button" onClick={live.pause}>
+          <button type="button" className="button" onClick={live.pause}>
             Pause
           </button>
         )}
         {state.status === "paused" && (
-          <button type="button" onClick={live.resume}>
+          <button type="button" className="button" onClick={live.resume}>
             Reprendre
           </button>
         )}
         {active && (
-          <button type="button" onClick={live.stop}>
+          <button type="button" className="button" onClick={live.stop}>
             Arrêter
           </button>
         )}
         {floating && (
-          <button type="button" onClick={floating.onToggle} aria-pressed={floating.open}
-            title="Une petite fenêtre toujours au premier plan, au-dessus du jeu">
-            {floating.open ? "Fermer la fenêtre flottante" : "Fenêtre flottante"}
-          </button>
+          <Tooltip.Provider delayDuration={300}>
+            <Tooltip.Root>
+              <Tooltip.Trigger className="button" onClick={floating.onToggle} aria-pressed={floating.open}>
+                {floating.open ? "Fermer la fenêtre flottante" : "Fenêtre flottante"}
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content className="tooltip" side="top" sideOffset={6}>
+                  Une petite fenêtre toujours au premier plan, au-dessus du jeu
+                  <Tooltip.Arrow className="tooltip-arrow" />
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+          </Tooltip.Provider>
         )}
       </div>
 
@@ -141,25 +151,30 @@ export function LivePanel({ live, positionZone, guide, floating, onClose }: Prop
             </div>
           )}
 
-          <label className="live-setting">
-            Stabilité : {options.stableReads} lectures identiques
-            <input
-              type="range"
+          <div className="live-setting">
+            <span id="live-stability">Stabilité : {options.stableReads} lectures identiques</span>
+            <Slider.Root
+              className="slider"
               min={2}
               max={6}
-              value={options.stableReads}
-              onChange={(e) => {
-                const stableReads = Number(e.target.value);
-                setOptions({ ...options, stableReads, jumpReads: stableReads * 2 });
-              }}
-            />
-          </label>
+              step={1}
+              value={[options.stableReads]}
+              onValueChange={([stableReads]) => setOptions({ ...options, stableReads, jumpReads: stableReads * 2 })}
+            >
+              <Slider.Track className="slider-track">
+                <Slider.Range className="slider-range" />
+              </Slider.Track>
+              <Slider.Thumb className="slider-thumb" aria-labelledby="live-stability" />
+            </Slider.Root>
+          </div>
           <label className="live-check">
-            <input
-              type="checkbox"
+            <Switch.Root
+              className="switch"
               checked={options.autoZone}
-              onChange={(e) => setOptions({ ...options, autoZone: e.target.checked })}
-            />
+              onCheckedChange={(autoZone) => setOptions({ ...options, autoZone })}
+            >
+              <Switch.Thumb className="switch-thumb" />
+            </Switch.Root>
             Changer de zone automatiquement
           </label>
           <button type="button" className="live-link" onClick={live.recalibrate}>
