@@ -3,11 +3,12 @@ import { RadioGroup, ToggleGroup } from "radix-ui";
 import { memo, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Circle, ImageOverlay, MapContainer, Marker, Pane, Polyline, Rectangle, Tooltip, useMap, useMapEvent } from "react-leaflet";
-import { TILE_HEIGHT, tileBounds, tileWidth, zoneBounds, type Bounds } from "../data/geometry";
+import { TILE_HEIGHT, tileBounds, tilePoint, tileWidth, zoneBounds, type Bounds } from "../data/geometry";
 import { drawLayout } from "../data/layout";
 import { leavePoint, planShapes, routeShapes } from "../data/plan";
 import type { EntranceRoute, Progress, RouteStep, ZoneGraph } from "../data/route";
-import { mapKey, type MapEntry, type Zone } from "../data/zones";
+import { gameCoords, mapKey, type FloorStair, type MapEntry, type Zone, type ZoneFloor } from "../data/zones";
+import { floorLabel, FloorPicker, type FloorChoice } from "./FloorPicker";
 import type { CheckedSet } from "../progress/progressStore";
 
 const STYLE_UNCHECKED: L.PathOptions = {
@@ -45,7 +46,10 @@ const STYLE_CURRENT: L.PathOptions = {
 };
 
 interface Props {
+  /** The zone shown: in a zone of landings, the landing shown. */
   zone: Zone;
+  /** The zone routes go over: the whole zone of landings (laid out flat), else the zone shown. */
+  routeZone: Zone;
   checked: CheckedSet;
   onToggle: (key: string) => void;
   /** Map the player is on (live capture), highlighted and kept in view. */
@@ -64,13 +68,22 @@ interface Props {
   graph: ZoneGraph | null;
   /** Live capture guiding the player: the move to make now, its sun highlighted. */
   nextStep: RouteStep | null;
+  /** In a zone of landings, the one shown, how to change it, and its stairs. */
+  floor?: FloorChoice & { stairs: FloorStair[] };
 }
 
 export function ZoneMap({
-  zone, checked, onToggle, current, showPaths, onShowPathsChange, showRoute, onShowRouteChange,
-  plans, plan, onChooseEntrance, progress, graph, nextStep,
+  zone, routeZone, checked, onToggle, current, showPaths, onShowPathsChange, showRoute, onShowRouteChange,
+  plans, plan, onChooseEntrance, progress, graph, nextStep, floor,
 }: Props) {
   const bounds = useMemo(() => zoneBounds(zone.maps, zone.tile_size), [zone]);
+  // Maps of a landing with nothing to check can't be ticked.
+  const counted = (m: MapEntry) => m.floor === undefined || zone.floors?.[m.floor]?.check !== false;
+  // In-game coordinates of a map, by its key here.
+  const shownAt = useMemo(() => {
+    const at = new Map(routeZone.maps.map((m) => [mapKey(m.x, m.y), gameCoords(m).join(",")]));
+    return (key: string) => at.get(key) ?? key;
+  }, [routeZone]);
   const { t } = useTranslation();
   return (
     <>
@@ -90,11 +103,14 @@ export function ZoneMap({
         attributionControl={false}
       >
         <FitOnResize bounds={bounds} />
-        <PlanLayer zone={zone} showPaths={showPaths} />
+        <PlanLayer zone={zone} showPaths={showPaths} stairs={floor?.stairs} />
+        {floor && <StairsLayer zone={zone} floor={floor} />}
         {plan && graph && progress && showRoute && (
-          <RouteLayer zone={zone} graph={graph} plan={plan} progress={progress} checked={checked} />
+          <RouteLayer zone={zone} routeZone={routeZone} graph={graph} plan={plan} progress={progress} checked={checked} onFloor={floor?.onChange} floors={floor?.floors} />
         )}
-        {nextStep && graph && <NextSun point={leavePoint(zone, graph, nextStep)} />}
+        {nextStep && graph && zone.maps.some((m) => mapKey(m.x, m.y) === graph.nodes[nextStep.from].map) && (
+          <NextSun point={leavePoint(routeZone, graph, nextStep)} />
+        )}
         {zone.maps.map((entry) => {
           const key = mapKey(entry.x, entry.y);
           return (
@@ -103,12 +119,13 @@ export function ZoneMap({
               zone={zone}
               entry={entry}
               checked={checked.has(key)}
-              onToggle={onToggle}
+              onToggle={counted(entry) ? onToggle : undefined}
             />
           );
         })}
         {current && <CurrentMap key={current} zone={zone} current={current} />}
       </MapContainer>
+      {floor && <FloorPicker {...floor} />}
       <div className="map-controls">
         <ToggleGroup.Root
           type="multiple"
@@ -124,7 +141,7 @@ export function ZoneMap({
           <ToggleGroup.Item value="route">{t("map.route")}</ToggleGroup.Item>
         </ToggleGroup.Root>
         {showRoute && plans && plan && progress && (
-          <RoutePanel plans={plans} plan={plan} progress={progress} onChoose={onChooseEntrance} />
+          <RoutePanel plans={plans} plan={plan} progress={progress} onChoose={onChooseEntrance} shownAt={shownAt} />
         )}
       </div>
     </>
@@ -132,7 +149,7 @@ export function ZoneMap({
 }
 
 /** Drawn tiles: a dark room per map, corridors for the passages, coordinates. */
-const PlanLayer = memo(function PlanLayer({ zone, showPaths }: { zone: Zone; showPaths: boolean }) {
+const PlanLayer = memo(function PlanLayer({ zone, showPaths, stairs }: { zone: Zone; showPaths: boolean; stairs?: FloorStair[] }) {
   const size = zone.tile_size;
   const shapes = useMemo(() => planShapes(zone), [zone]);
   // Drawn once per zone: an image per map is far lighter than a shape per cell.
@@ -140,15 +157,20 @@ const PlanLayer = memo(function PlanLayer({ zone, showPaths }: { zone: Zone; sho
     () =>
       zone.maps
         .filter((m) => m.layout)
-        .map((m) => ({ key: mapKey(m.x, m.y), bounds: tileBounds(m.x, m.y, size), url: drawLayout(m.layout!) })),
-    [zone, size],
+        .map((m) => ({
+          key: mapKey(m.x, m.y),
+          bounds: tileBounds(m.x, m.y, size),
+          // Stair icons replace their suns.
+          url: drawLayout(m.layout!, (stairs ?? []).filter((st) => st.x === m.x && st.y === m.y).map((st) => st.uv)),
+        })),
+    [zone, size, stairs],
   );
   const labels = useMemo(
     () =>
       zone.maps.map((m) => ({
         key: mapKey(m.x, m.y),
         position: [-m.y * TILE_HEIGHT - 4, m.x * tileWidth(size) + 6] as [number, number],
-        icon: L.divIcon({ className: "plan-label", html: `${m.x},${m.y}`, iconSize: undefined, iconAnchor: [0, 0] }),
+        icon: L.divIcon({ className: "plan-label", html: gameCoords(m).join(","), iconSize: undefined, iconAnchor: [0, 0] }),
       })),
     [zone, size],
   );
@@ -193,11 +215,47 @@ const PlanLayer = memo(function PlanLayer({ zone, showPaths }: { zone: Zone; sho
  * order, the entrance marked. The part already walked (up to the last map
  * checked in order) is dimmed.
  */
-function RouteLayer({ zone, graph, plan, progress, checked }: {
-  zone: Zone; graph: ZoneGraph; plan: EntranceRoute; progress: Progress; checked: CheckedSet;
+function RouteLayer({ zone, routeZone, graph, plan, progress, checked, onFloor, floors }: {
+  zone: Zone; routeZone: Zone; graph: ZoneGraph; plan: EntranceRoute; progress: Progress; checked: CheckedSet;
+  /** Zones of landings: go to a landing (from a stair the route takes). */
+  onFloor?: (floor: number) => void;
+  /** Zones of landings: their landings, to say where a stair leads. */
+  floors?: ZoneFloor[];
 }) {
-  const shapes = useMemo(() => routeShapes(zone, graph, plan.route, plan.entrance?.uv), [zone, graph, plan]);
-  const split = shapes.arrivals[progress.fromIndex]; // where the stretch to the next goal begins
+  const { t } = useTranslation();
+  const shapes = useMemo(() => routeShapes(routeZone, graph, plan.route, plan.entrance?.uv), [routeZone, graph, plan]);
+  // The walk over each map in turn (and on to the next one): only the maps shown are drawn,
+  // the ones before the next goal dimmed.
+  const pieces = useMemo(() => {
+    const shown = new Set(zone.maps.map((m) => mapKey(m.x, m.y)));
+    const mapAt = (k: number) => graph.nodes[k === 0 ? plan.route.start : plan.route.steps[k - 1].to].map;
+    const { line, arrivals } = shapes;
+    return arrivals.flatMap((from, k) => {
+      if (!shown.has(mapAt(k))) return [];
+      const next = arrivals[k + 1];
+      const to = next === undefined ? line.length : shown.has(mapAt(k + 1)) ? next + 1 : next;
+      return [{ positions: line.slice(from, to), done: k < progress.fromIndex }];
+    });
+  }, [zone, graph, plan, shapes, progress.fromIndex]);
+  const numbers = useMemo(() => {
+    const shown = new Set(zone.maps.map((m) => mapKey(m.x, m.y)));
+    return shapes.numbers.map((n, i) => ({ n, i })).filter(({ n }) => shown.has(n.map));
+  }, [zone, shapes]);
+  // Stairs the route leaves this landing by.
+  const stairs = useMemo(() => {
+    const shown = new Set(zone.maps.map((m) => mapKey(m.x, m.y)));
+    const floorOf = new Map(routeZone.maps.map((m) => [mapKey(m.x, m.y), m.floor]));
+    return plan.route.steps.flatMap((step, k) => {
+      const [from, to] = [graph.nodes[step.from].map, graph.nodes[step.to].map];
+      if (!shown.has(from) || shown.has(to)) return [];
+      return [{
+        // On the stair's sun, like the plain stair icon it covers.
+        position: leavePoint(routeZone, graph, step),
+        floor: floorOf.get(to),
+        icon: L.divIcon({ className: `route-stair${k + 1 <= progress.fromIndex ? " done" : ""}`, html: "⇅", iconSize: [22, 22] }),
+      }];
+    });
+  }, [zone, routeZone, graph, plan, progress.fromIndex]);
   const icons = useMemo(
     () => shapes.numbers.map((n, i) =>
       L.divIcon({
@@ -209,13 +267,34 @@ function RouteLayer({ zone, graph, plan, progress, checked }: {
     [shapes, checked, plan],
   );
   return (
-    <Pane name="route" style={{ zIndex: 360 }}>
-      {split > 0 && <Polyline positions={shapes.line.slice(0, split + 1)} pathOptions={ROUTE_DONE} />}
-      <Polyline positions={shapes.line.slice(split)} pathOptions={ROUTE_LINE} />
-      {shapes.numbers.map((n, i) => (
-        <Marker key={`step${i}`} position={n.position} icon={icons[i]} interactive={false} keyboard={false} pane="markerPane" />
-      ))}
-    </Pane>
+    <>
+      <Pane name="route" style={{ zIndex: 360 }}>
+        {pieces.map((piece, k) => (
+          <Polyline key={`walk${k}`} positions={piece.positions} pathOptions={piece.done ? ROUTE_DONE : ROUTE_LINE} />
+        ))}
+        {numbers.map(({ n, i }) => (
+          <Marker key={`step${i}`} position={n.position} icon={icons[i]} interactive={false} keyboard={false} pane="markerPane" />
+        ))}
+      </Pane>
+      {/* Above the plain stair icons. */}
+      <Pane name="route-stairs" style={{ zIndex: 660 }}>
+        {stairs.map((st, k) => (
+          <Marker
+            key={`stair${k}`}
+            position={st.position}
+            icon={st.icon}
+            pane="route-stairs"
+            eventHandlers={{ click: () => st.floor !== undefined && onFloor?.(st.floor) }}
+          >
+            {floors && st.floor !== undefined && (
+              <Tooltip direction="top" offset={[0, -10]}>
+                {t("floor.stairsTo", { floor: floorLabel(t, floors, st.floor) })}
+              </Tooltip>
+            )}
+          </Marker>
+        ))}
+      </Pane>
+    </>
   );
 }
 
@@ -227,12 +306,14 @@ function NextSun({ point }: { point: [number, number] }) {
   );
 }
 
-function RoutePanel({ plans, plan, progress, onChoose }: {
+function RoutePanel({ plans, plan, progress, onChoose, shownAt }: {
   plans: EntranceRoute[]; plan: EntranceRoute; progress: Progress; onChoose: (plan: EntranceRoute) => void;
+  /** In-game coordinates of a map key. */
+  shownAt: (key: string) => string;
 }) {
   const most = plans[0].route.order.length;
   const moves = plan.route.steps.length;
-  const repeats = moves + 1 - plan.route.order.length;
+  const repeats = moves + 1 - plan.route.walked;
   const goal = progress.nextGoal;
   const done = goal ? plan.route.order.indexOf(goal) : plan.route.order.length;
   const { t } = useTranslation();
@@ -255,7 +336,7 @@ function RoutePanel({ plans, plan, progress, onChoose }: {
                     <RadioGroup.Indicator className="radio-dot" />
                   </RadioGroup.Item>
                   <span>
-                    [{e.x},{e.y}] {t(`route.kind.${e.kind}`)}
+                    [{(e.at ?? [e.x, e.y]).join(",")}] {t(`route.kind.${e.kind}`)}
                     {e.to && <small> → {e.to}</small>}
                     <br />
                     <small>
@@ -272,7 +353,7 @@ function RoutePanel({ plans, plan, progress, onChoose }: {
       <p>
         {t("route.moves", { count: moves })} · {t("route.repeats", { count: repeats })}
         <br />
-        {goal ? t("route.next", { done, total: plan.route.order.length, goal }) : t("route.done")}
+        {goal ? t("route.next", { done, total: plan.route.order.length, goal: shownAt(goal) }) : t("route.done")}
         {plan.route.unreachable.length > 0 && (
           <>
             <br />
@@ -335,17 +416,42 @@ function CurrentMap({ zone, current }: { zone: Zone; current: string }) {
   return bounds ? <Rectangle bounds={bounds} pathOptions={STYLE_CURRENT} /> : null;
 }
 
+/** Stairs to other landings (seen in a walk through the zone): a click goes there. */
+function StairsLayer({ zone, floor }: { zone: Zone; floor: FloorChoice & { stairs: FloorStair[] } }) {
+  const { t } = useTranslation();
+  const icon = useMemo(() => L.divIcon({ className: "floor-way", html: "⇅", iconSize: [22, 22] }), []);
+  const { stairs, onChange, floors } = floor;
+  return (
+    <Pane name="stairs" style={{ zIndex: 650 }}>
+      {stairs.map((s, i) => (
+        <Marker
+          key={i}
+          position={tilePoint(s.x, s.y, s.uv, zone.tile_size)}
+          icon={icon}
+          pane="stairs"
+          eventHandlers={{ click: () => onChange(s.to) }}
+        >
+          <Tooltip direction="top" offset={[0, -10]}>
+            {t("floor.stairsTo", { floor: floorLabel(t, floors, s.to) })}
+          </Tooltip>
+        </Marker>
+      ))}
+    </Pane>
+  );
+}
+
 interface TileProps {
   zone: Zone;
   entry: MapEntry;
   checked: boolean;
-  onToggle: (key: string) => void;
+  /** Missing: nothing to check on this map. */
+  onToggle?: (key: string) => void;
 }
 
 const MapTile = memo(function MapTile({ zone, entry, checked, onToggle }: TileProps) {
   const bounds = useMemo(() => tileBounds(entry.x, entry.y, zone.tile_size), [entry, zone.tile_size]);
   const handlers = useMemo(
-    () => ({ click: () => onToggle(mapKey(entry.x, entry.y)) }),
+    () => ({ click: () => onToggle?.(mapKey(entry.x, entry.y)) }),
     [entry, onToggle],
   );
   const style = checked ? STYLE_CHECKED : entry.source === "inferred" ? STYLE_INFERRED : STYLE_UNCHECKED;
@@ -353,9 +459,10 @@ const MapTile = memo(function MapTile({ zone, entry, checked, onToggle }: TilePr
   return (
     <Rectangle bounds={bounds} pathOptions={style} eventHandlers={handlers}>
       <Tooltip direction="top" offset={[0, -8]}>
-        <strong>[{entry.x},{entry.y}]</strong>
+        <strong>[{gameCoords(entry).join(",")}]</strong>
         {checked ? t("map.checked") : ""}
         {entry.source === "inferred" ? <div className="tooltip-note">{t("map.estimated")}</div> : null}
+        {onToggle ? null : <div className="tooltip-note">{t("floor.nothing")}</div>}
       </Tooltip>
     </Rectangle>
   );
