@@ -23,6 +23,12 @@ import { PositionTracker, type TrackerOptions } from "./tracker";
 
 export type LiveStatus = "idle" | "starting" | "running" | "paused" | "error";
 
+/** What the panel says about the capture (translated there), with an error's details. */
+export interface LiveMessage {
+  key: "chooseWindow" | "cancelled" | "loadingOcr" | "ocrFailed";
+  detail?: string;
+}
+
 export interface LiveLayout {
   frame: [number, number];
   game: Box;
@@ -34,7 +40,7 @@ export interface LiveLayout {
 
 export interface LiveState {
   status: LiveStatus;
-  message: string | null;
+  message: LiveMessage | null;
   layout: LiveLayout | null;
   /** Raw OCR text per binarization, from the last capture. */
   readings: string[];
@@ -118,11 +124,11 @@ export class LiveSession {
 
   async start() {
     if (this.state.status !== "idle" && this.state.status !== "error") return;
-    this.update({ ...IDLE_STATE, status: "starting", message: "Choisissez la fenêtre Dofus Retro…" });
+    this.update({ ...IDLE_STATE, status: "starting", message: { key: "chooseWindow" } });
     try {
       this.stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 5 } }, audio: false });
     } catch {
-      this.update({ ...IDLE_STATE, message: "Capture annulée." });
+      this.update({ ...IDLE_STATE, message: { key: "cancelled" } });
       return;
     }
     this.stream.getVideoTracks()[0]?.addEventListener("ended", () => this.stop());
@@ -132,7 +138,7 @@ export class LiveSession {
     this.video.srcObject = this.stream;
     await this.video.play();
     try {
-      this.update({ message: "Chargement de l'OCR…" });
+      this.update({ message: { key: "loadingOcr" } });
       [this.digits, this.words] = await Promise.all([createWorker("eng"), createWorker("eng")]);
       await this.digits.setParameters({
         tessedit_char_whitelist: "-0123456789,",
@@ -140,7 +146,7 @@ export class LiveSession {
       });
       await this.words.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK });
     } catch (e) {
-      this.fail(`Impossible de charger l'OCR : ${(e as Error).message}`);
+      this.fail({ key: "ocrFailed", detail: (e as Error).message });
       return;
     }
     if (!this.stream) return; // Stopped while loading.
@@ -192,7 +198,7 @@ export class LiveSession {
     this.onState(this.state);
   }
 
-  private fail(message: string) {
+  private fail(message: LiveMessage) {
     this.stop();
     this.update({ status: "error", message });
   }

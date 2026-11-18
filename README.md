@@ -116,6 +116,8 @@ bun run build      # static site in web/dist/
 bun run test       # unit tests
 ```
 
+The interface is in French and English (i18next, texts in `web/src/i18n/`): the flags next to the logo switch it, and the choice is remembered with the other settings (`archimap:language`). Before any choice, the browser's language is used, English when it is neither. Zone and map names stay as the game shows them, in French.
+
 The map is a plan with one tile per map, showing the map's layout: floor, walls, suns in yellow, and on split maps each part with an exit in its own colour. Solid lines are walking routes between a map's suns, dashed lines are map changes; the **Chemins** button shows or hides them.
 
 The **Parcours** button draws a short walk through the whole zone, starting at an entrance (▶), with maps numbered in visiting order and the number of moves and of returns to a map already seen. It goes from sun to sun along each map's floor, and takes split maps into account: each part has to be reached through its own suns, and a sun leading into a split map lands in one part only (the one by the sun facing it), so some passages can only be walked one way. A walk is planned from each entrance of the zone; the panel lists them, the shortest first, and the one you pick is remembered. The walk is computed once and doesn't change as you check maps: the stretch already done is dimmed and checked maps' numbers are greyed. Maps that can't be reached from inside the zone (Sous-terrain des Dragoeufs, where you have to go back up to the surface) are counted apart and left out of the walk.

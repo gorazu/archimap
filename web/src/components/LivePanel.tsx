@@ -1,5 +1,6 @@
 import { Slider, Switch, Tooltip } from "radix-ui";
 import { useEffect, useRef } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import type { LiveCapture } from "../live/useLiveCapture";
 
 interface Props {
@@ -13,61 +14,58 @@ interface Props {
   onClose: () => void;
 }
 
-const STATUS_TEXT = {
-  idle: "Arrêté",
-  starting: "Démarrage…",
-  running: "En direct",
-  paused: "En pause",
-  error: "Erreur",
-} as const;
-
 export function LivePanel({ live, positionZone, guide, floating, onClose }: Props) {
   const { state, options, setOptions } = live;
   const active = state.status === "running" || state.status === "paused";
   const position = state.position;
+  const { t } = useTranslation();
 
   return (
-    <section className="live-panel" aria-label="Capture en direct">
+    <section className="live-panel" aria-label={t("live.panel")}>
       <header className="live-head">
         <span className={`live-dot ${state.status}`} aria-hidden="true" />
-        <strong>{STATUS_TEXT[state.status]}</strong>
-        <button type="button" className="live-close" onClick={onClose} aria-label="Fermer">
+        <strong>{t(`live.status.${state.status}`)}</strong>
+        <button type="button" className="live-close" onClick={onClose} aria-label={t("live.close")}>
           ×
         </button>
       </header>
 
-      {state.message && <p className={`live-message${state.status === "error" ? " error" : ""}`}>{state.message}</p>}
+      {state.message && (
+        <p className={`live-message${state.status === "error" ? " error" : ""}`}>
+          {t(`live.message.${state.message.key}`, { detail: state.message.detail })}
+        </p>
+      )}
 
       <div className="live-actions">
         {!active && state.status !== "starting" && (
           <button type="button" className="button primary" onClick={live.start}>
-            Démarrer la capture
+            {t("live.start")}
           </button>
         )}
         {state.status === "running" && (
           <button type="button" className="button" onClick={live.pause}>
-            Pause
+            {t("live.pause")}
           </button>
         )}
         {state.status === "paused" && (
           <button type="button" className="button" onClick={live.resume}>
-            Reprendre
+            {t("live.resume")}
           </button>
         )}
         {active && (
           <button type="button" className="button" onClick={live.stop}>
-            Arrêter
+            {t("live.stop")}
           </button>
         )}
         {floating && (
           <Tooltip.Provider delayDuration={300}>
             <Tooltip.Root>
               <Tooltip.Trigger className="button" onClick={floating.onToggle} aria-pressed={floating.open}>
-                {floating.open ? "Fermer la fenêtre flottante" : "Fenêtre flottante"}
+                {floating.open ? t("live.closeFloating") : t("live.floating")}
               </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Content className="tooltip" side="top" sideOffset={6}>
-                  Une petite fenêtre toujours au premier plan, au-dessus du jeu
+                  {t("live.floatingHint")}
                   <Tooltip.Arrow className="tooltip-arrow" />
                 </Tooltip.Content>
               </Tooltip.Portal>
@@ -78,72 +76,70 @@ export function LivePanel({ live, positionZone, guide, floating, onClose }: Prop
 
       {!active && state.status !== "starting" && (
         <div className="live-hint">
-          <p>Avant de démarrer, dans Dofus Retro :</p>
+          <p>{t("live.before")}</p>
           <ul>
             <li>
-              activez l'option <em>interface moderne</em> ;
+              <Trans i18nKey="live.modernUi" components={[<em />]} />
             </li>
-            <li>placez le chat sur le côté droit de la fenêtre.</li>
+            <li>{t("live.chatRight")}</li>
           </ul>
-          <p>
-            Partagez ensuite la fenêtre du jeu (n'importe quelle taille). Chaque carte où vous passez est cochée
-            automatiquement.
-          </p>
+          <p>{t("live.share")}</p>
         </div>
       )}
 
       {active && (
         <>
           <dl className="live-info">
-            <dt>Position</dt>
+            <dt>{t("live.position")}</dt>
             <dd>
               {position ? (
                 <>
                   <strong>
                     [{position[0]},{position[1]}]
                   </strong>{" "}
-                  {positionZone ? `· ${positionZone}` : "· hors des zones suivies"}
+                  {positionZone ? `· ${positionZone}` : t("live.outside")}
                 </>
               ) : (
-                "En attente d'une lecture stable…"
+                t("live.waiting")
               )}
             </dd>
             {guide && (
               <>
-                <dt>Ensuite</dt>
+                <dt>{t("live.next")}</dt>
                 <dd className="live-guide">
                   <strong>{guide.next}</strong>
                   {guide.rest && <div>{guide.rest}</div>}
                   {guide.unreachable > 0 && (
-                    <div>
-                      {guide.unreachable} carte{guide.unreachable > 1 ? "s" : ""} hors d'atteinte d'ici (par la surface ?)
-                    </div>
+                    <div>{t("guide.unreachable", { count: guide.unreachable })}</div>
                   )}
                 </dd>
               </>
             )}
-            <dt>Lieu</dt>
-            <dd>{state.location ?? "illisible (position seule)"}</dd>
-            <dt>Lecture</dt>
+            <dt>{t("live.place")}</dt>
+            <dd>{state.location ?? t("live.unreadable")}</dd>
+            <dt>{t("live.reading")}</dt>
             <dd>
               <code>{state.readings.length ? state.readings.map((r) => r || "—").join("  |  ") : "—"}</code>
             </dd>
-            <dt>Détection</dt>
+            <dt>{t("live.detection")}</dt>
             <dd>
               {state.layout ? (
                 <>
-                  Jeu {state.layout.game.w}×{state.layout.game.h} sur {state.layout.frame[0]}×{state.layout.frame[1]}
+                  {t("live.game", {
+                    game: `${state.layout.game.w}×${state.layout.game.h}`,
+                    frame: `${state.layout.frame[0]}×${state.layout.frame[1]}`,
+                  })}
                   {" · "}
-                  {state.layout.coordsFound ? "coordonnées trouvées" : "coordonnées : position par défaut"}
+                  {t(state.layout.coordsFound ? "live.coordsFound" : "live.coordsDefault")}
                 </>
               ) : (
-                "Analyse de la fenêtre…"
+                t("live.analysing")
               )}
             </dd>
           </dl>
 
           {state.preview && (
-            <div className="live-preview" title="Ce que lit l'OCR">
+            <div className="live-preview" title={t("live.ocrPreview")}>
               <ImageCanvas image={state.preview.crop} />
               {state.preview.binarized.map((img, i) => (
                 <ImageCanvas key={i} image={img} />
@@ -152,7 +148,7 @@ export function LivePanel({ live, positionZone, guide, floating, onClose }: Prop
           )}
 
           <div className="live-setting">
-            <span id="live-stability">Stabilité : {options.stableReads} lectures identiques</span>
+            <span id="live-stability">{t("live.stability", { count: options.stableReads })}</span>
             <Slider.Root
               className="slider"
               min={2}
@@ -175,10 +171,10 @@ export function LivePanel({ live, positionZone, guide, floating, onClose }: Prop
             >
               <Switch.Thumb className="switch-thumb" />
             </Switch.Root>
-            Changer de zone automatiquement
+            {t("live.autoZone")}
           </label>
           <button type="button" className="live-link" onClick={live.recalibrate}>
-            Recalibrer la détection
+            {t("live.recalibrate")}
           </button>
         </>
       )}

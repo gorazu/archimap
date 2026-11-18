@@ -1,6 +1,7 @@
 import L from "leaflet";
 import { RadioGroup, ToggleGroup } from "radix-ui";
 import { memo, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Circle, ImageOverlay, MapContainer, Marker, Pane, Polyline, Rectangle, Tooltip, useMap, useMapEvent } from "react-leaflet";
 import { TILE_HEIGHT, tileBounds, tileWidth, zoneBounds, type Bounds } from "../data/geometry";
 import { drawLayout } from "../data/layout";
@@ -70,6 +71,7 @@ export function ZoneMap({
   plans, plan, onChooseEntrance, progress, graph, nextStep,
 }: Props) {
   const bounds = useMemo(() => zoneBounds(zone.maps, zone.tile_size), [zone]);
+  const { t } = useTranslation();
   return (
     <>
       <MapContainer
@@ -111,15 +113,15 @@ export function ZoneMap({
         <ToggleGroup.Root
           type="multiple"
           className="map-toggles"
-          aria-label="Affichage"
+          aria-label={t("map.display")}
           value={[...(showPaths ? ["paths"] : []), ...(showRoute ? ["route"] : [])]}
           onValueChange={(shown) => {
             onShowPathsChange(shown.includes("paths"));
             onShowRouteChange(shown.includes("route"));
           }}
         >
-          <ToggleGroup.Item value="paths">Chemins</ToggleGroup.Item>
-          <ToggleGroup.Item value="route">Parcours</ToggleGroup.Item>
+          <ToggleGroup.Item value="paths">{t("map.paths")}</ToggleGroup.Item>
+          <ToggleGroup.Item value="route">{t("map.route")}</ToggleGroup.Item>
         </ToggleGroup.Root>
         {showRoute && plans && plan && progress && (
           <RoutePanel plans={plans} plan={plan} progress={progress} onChoose={onChooseEntrance} />
@@ -225,8 +227,6 @@ function NextSun({ point }: { point: [number, number] }) {
   );
 }
 
-const ENTRANCE_KIND = { ladder: "échelle", sun: "soleil", manual: "entrée" } as const;
-
 function RoutePanel({ plans, plan, progress, onChoose }: {
   plans: EntranceRoute[]; plan: EntranceRoute; progress: Progress; onChoose: (plan: EntranceRoute) => void;
 }) {
@@ -235,11 +235,12 @@ function RoutePanel({ plans, plan, progress, onChoose }: {
   const repeats = moves + 1 - plan.route.order.length;
   const goal = progress.nextGoal;
   const done = goal ? plan.route.order.indexOf(goal) : plan.route.order.length;
+  const { t } = useTranslation();
   return (
     <div className="route-panel">
       {plans[0].entrance && (
         <div className="route-entrances">
-          <div className="route-legend" id="route-entrance">Entrée</div>
+          <div className="route-legend" id="route-entrance">{t("route.entrance")}</div>
           <RadioGroup.Root
             aria-labelledby="route-entrance"
             value={String(plans.indexOf(plan))}
@@ -254,12 +255,12 @@ function RoutePanel({ plans, plan, progress, onChoose }: {
                     <RadioGroup.Indicator className="radio-dot" />
                   </RadioGroup.Item>
                   <span>
-                    [{e.x},{e.y}] {ENTRANCE_KIND[e.kind]}
+                    [{e.x},{e.y}] {t(`route.kind.${e.kind}`)}
                     {e.to && <small> → {e.to}</small>}
                     <br />
                     <small>
-                      {reach < most ? `seulement ${reach} carte${reach > 1 ? "s" : ""}` : `${p.route.steps.length} déplacements`}
-                      {i === 0 && " · la plus courte"}
+                      {reach < most ? t("route.onlyMaps", { count: reach }) : t("route.moves", { count: p.route.steps.length })}
+                      {i === 0 && t("route.shortest")}
                     </small>
                   </span>
                 </label>
@@ -269,14 +270,13 @@ function RoutePanel({ plans, plan, progress, onChoose }: {
         </div>
       )}
       <p>
-        {moves} déplacements · {repeats} retour{repeats > 1 ? "s" : ""} sur une carte déjà vue
+        {t("route.moves", { count: moves })} · {t("route.repeats", { count: repeats })}
         <br />
-        {goal ? `${done} / ${plan.route.order.length} · prochaine carte [${goal}]` : "Parcours terminé !"}
+        {goal ? t("route.next", { done, total: plan.route.order.length, goal }) : t("route.done")}
         {plan.route.unreachable.length > 0 && (
           <>
             <br />
-            {plan.route.unreachable.length} carte{plan.route.unreachable.length > 1 ? "s" : ""} hors d'atteinte depuis
-            cette entrée
+            {t("route.unreachable", { count: plan.route.unreachable.length })}
           </>
         )}
       </p>
@@ -349,12 +349,13 @@ const MapTile = memo(function MapTile({ zone, entry, checked, onToggle }: TilePr
     [entry, onToggle],
   );
   const style = checked ? STYLE_CHECKED : entry.source === "inferred" ? STYLE_INFERRED : STYLE_UNCHECKED;
+  const { t } = useTranslation();
   return (
     <Rectangle bounds={bounds} pathOptions={style} eventHandlers={handlers}>
       <Tooltip direction="top" offset={[0, -8]}>
         <strong>[{entry.x},{entry.y}]</strong>
-        {checked ? " · vérifiée" : ""}
-        {entry.source === "inferred" ? <div className="tooltip-note">Position estimée</div> : null}
+        {checked ? t("map.checked") : ""}
+        {entry.source === "inferred" ? <div className="tooltip-note">{t("map.estimated")}</div> : null}
       </Tooltip>
     </Rectangle>
   );

@@ -1,4 +1,6 @@
+import type { TFunction } from "i18next";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { FloatingGuide, FloatingWindow, FLOATING_SUPPORTED, useFloatingWindow } from "./components/FloatingGuide";
 import { Header } from "./components/Header";
 import { LivePanel } from "./components/LivePanel";
@@ -66,20 +68,18 @@ function initialZone(zones: ZoneSummary[]): string | null {
 }
 
 /** The live guide's lines: which sun to click next, and what's left. */
-function guideText(guidance: Guidance, progress: Progress, graph: ZoneGraph, left: number, unreachable: number) {
+function guideText(t: TFunction, guidance: Guidance, progress: Progress, graph: ZoneGraph, left: number, unreachable: number) {
   const step = guidance.step;
   if (!step) {
-    return {
-      next: progress.nextGoal ? "Prochaine carte du parcours hors d'atteinte d'ici" : "Zone terminée !",
-      rest: null,
-      unreachable,
-    };
+    return { next: t(progress.nextGoal ? "guide.goalUnreachable" : "guide.zoneDone"), rest: null, unreachable };
   }
   const target = graph.nodes[step.to];
-  const where = step.leave ? `soleil ${describePosition(step.leave)}` : "passage";
+  const where = step.leave
+    ? t("guide.sun", { where: t(`guide.position.${describePosition(step.leave)}`) })
+    : t("guide.passage");
   return {
-    next: `${guidance.detour ? "Retour au parcours : " : ""}${where} → [${target.x},${target.y}]`,
-    rest: `${left} carte${left > 1 ? "s" : ""} à vérifier · ${guidance.remaining} déplacement${guidance.remaining > 1 ? "s" : ""}`,
+    next: `${guidance.detour ? t("guide.back") : ""}${where} → [${target.x},${target.y}]`,
+    rest: `${t("guide.left", { count: left })} · ${t("guide.remaining", { count: guidance.remaining })}`,
     unreachable,
   };
 }
@@ -98,6 +98,7 @@ function storedEntrance(zone: string): string | null {
 }
 
 export function App() {
+  const { t } = useTranslation();
   const [zones, setZones] = useState<ZoneSummary[] | null>(null);
   // The zone picked, or one part of it: "zone/part".
   const [slug, setSlug] = useState<string | null>(null);
@@ -240,7 +241,7 @@ export function App() {
   }, [guidance]);
   const left = zone ? zone.maps.filter((m) => !checked.has(mapKey(m.x, m.y))).length : 0;
   const guide = guidance && progress && graph && plan
-    ? guideText(guidance, progress, graph, left, plan.route.unreachable.length) : null;
+    ? guideText(t, guidance, progress, graph, left, plan.route.unreachable.length) : null;
   const floating = useFloatingWindow();
 
   // Ignore stored keys for maps that are no longer in the zone.
@@ -274,12 +275,13 @@ export function App() {
         {error ? (
           <div className="message error">{error}</div>
         ) : zones === null || (slug && !zone) ? (
-          <div className="message">Chargement…</div>
+          <div className="message">{t("app.loading")}</div>
         ) : zones.length === 0 ? (
           <div className="message">
-            <p>Aucune zone pour l'instant.</p>
+            <p>{t("app.noZones")}</p>
             <p>
-              Générez-en une avec le pipeline :<br />
+              {t("app.generate")}
+              <br />
               <code>uv run python -m archimap.extract video.mp4 --zone ma-zone</code>
             </p>
           </div>
