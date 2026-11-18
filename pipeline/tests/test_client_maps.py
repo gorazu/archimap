@@ -78,6 +78,16 @@ def test_inner_exits_of_a_closed_room():
     assert sorted((e.side, e.inner) for e in areas[0].exits) == [("bottom", True), ("top", True)]
 
 
+def test_a_sun_near_a_corner_leads_off_its_closest_edge():
+    # Égouts de Bonta [-34,-56]: the sun 1 from the top, 3 from the left
+    # leads up; the one 1 from the left, 3 from the bottom leads left.
+    areas = map_areas(variables({(3, 1): cell(SUN), (1, 29): cell(SUN)}))
+    assert sorted((e.side, e.uv) for a in areas for e in a.exits) == [("left", (0.036, 0.906)), ("top", (0.107, 0.031))]
+    # As close to both edges: counts on both.
+    areas = map_areas(variables({(1, 1): cell(SUN)}))
+    assert sorted(e.side for a in areas for e in a.exits) == ["left", "top"]
+
+
 def test_unsplit_maps_connect_whatever_the_sun_positions():
     # Suns aren't mirrored between maps: leave mid-edge, the way back sits in a corner.
     areas = {(0, 0): [Area((0.5, 0.5), [Exit("right", 0.4)])],

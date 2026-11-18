@@ -198,8 +198,9 @@ def _exits(suns: list[tuple[int, int]], cols: int, rows: int) -> list[tuple[Exit
     cell that stands for it."""
     found: dict[tuple[str, bool], list[tuple[float, tuple[int, int]]]] = {}
     for x, y in suns:
-        near = [side for side, ok in (("left", x <= EDGE_MARGIN), ("right", x >= cols - EDGE_MARGIN),
-                                      ("top", y <= EDGE_MARGIN), ("bottom", y >= rows - EDGE_MARGIN)) if ok]
+        gaps = {"left": x, "right": cols - x, "top": y, "bottom": rows - y}
+        # Near a corner, a sun leads off its closest edge (both when as close).
+        near = [side for side, gap in gaps.items() if gap <= EDGE_MARGIN and gap == min(gaps.values())]
         if not near:  # inside a closed room: pointing away from the centre
             dx, dy = x - cols / 2, y - rows / 2
             near = [("right" if dx > 0 else "left") if abs(dx) > abs(dy) else ("bottom" if dy > 0 else "top")]
