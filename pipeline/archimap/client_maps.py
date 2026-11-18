@@ -19,6 +19,8 @@ import collections
 import functools
 
 import glob
+import heapq
+import math
 import os
 import struct
 import zlib
@@ -245,7 +247,7 @@ def _exits(suns: list[tuple[int, int]], cols: int, rows: int) -> list[tuple[Exit
                 continue
             t = sum(g[0] for g in group) / len(group)
             cell = min(group, key=lambda g: abs(g[0] - t))[1]
-            uv = (round(cell[0] / cols, 3), round(cell[1] / rows, 3))
+            uv = _uv(cell, cols, rows)
             exits.append((Exit(side, round(t, 3), inner, uv), cell))
             if item is not None:
                 group = [item]
@@ -271,34 +273,135 @@ def _route(part: set[tuple[int, int]], start: tuple[int, int], goal: set[tuple[i
     return [start]
 
 
-def _straighten(path: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    """Drop the points in the middle of straight stretches."""
-    out = path[:2]
-    for p in path[2:]:
-        a, b = out[-2], out[-1]
-        if (b[0] - a[0], b[1] - a[1]) == (p[0] - b[0], p[1] - b[1]):
-            out[-1] = p
-        else:
-            out.append(p)
+def _uv(cell: tuple[float, float], cols: int, rows: int) -> tuple[float, float]:
+    """Where a cell sits in the map's tile, (u, v): cells are a half-cell wide
+    on each side, so the grid spans -1..cols+1 across and -1..rows+1 down,
+    as the plan draws it."""
+    return round((cell[0] + 1) / (cols + 2), 3), round((cell[1] + 1) / (rows + 2), 3)
+
+
+# On screen, a half-cell down is about half as long as a half-cell across.
+_ASPECT_Y = 0.54
+# Walls and the map's edges stop mattering this many steps away.
+_CLEARANCE = 3
+# How much a step next to a wall costs more than one in the open.
+_WALL_COST = 1.5
+
+
+def _clearance(part: set[tuple[int, int]]) -> dict[tuple[int, int], int]:
+    """Steps from each cell to the nearest cell off the part (a wall, or off the map), 1 next to one."""
+    far = {p: 1 for p in part if any((p[0] + dx, p[1] + dy) not in part for dx, dy in _STEPS)}
+    queue = deque(far)
+    while queue:
+        p = queue.popleft()
+        for dx, dy in _STEPS:
+            q = (p[0] + dx, p[1] + dy)
+            if q in part and q not in far:
+                far[q] = far[p] + 1
+                queue.append(q)
+    return {p: min(far.get(p, _CLEARANCE), _CLEARANCE) for p in part}
+
+
+def _distances(part: set[tuple[int, int]], clear: dict[tuple[int, int], int],
+               start: tuple[int, int]) -> tuple[dict, dict]:
+    """Cost of the walk from start to every cell, and the cell before on it.
+    Steps cost their length on screen, more next to walls: walks keep to
+    the open floor."""
+    best = {start: 0.0}
+    previous = {start: start}
+    heap = [(0.0, start)]
+    while heap:
+        d, p = heapq.heappop(heap)
+        if d > best[p]:
+            continue
+        for dx, dy in _STEPS:
+            q = (p[0] + dx, p[1] + dy)
+            if q not in part:
+                continue
+            cost = math.hypot(dx, dy * _ASPECT_Y) * (1 + _WALL_COST * (_CLEARANCE - clear[q]) / _CLEARANCE)
+            if d + cost < best.get(q, math.inf):
+                best[q] = d + cost
+                previous[q] = p
+                heapq.heappush(heap, (d + cost, q))
+    return best, previous
+
+
+def _cell_at(x: float, y: float) -> tuple[int, int]:
+    """The cell (a diamond of the grid) a point lies in."""
+    cx, cy = round(x), round(y)
+    if (cx + cy) % 2:
+        cx, cy = min(((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)),
+                     key=lambda c: abs(c[0] - x) + abs(c[1] - y))
+    return cx, cy
+
+
+def _line_cells(a: tuple[int, int], b: tuple[int, int]) -> list[tuple[int, int]]:
+    steps = 4 * max(abs(b[0] - a[0]), abs(b[1] - a[1]), 1)
+    return [_cell_at(a[0] + (b[0] - a[0]) * k / steps, a[1] + (b[1] - a[1]) * k / steps) for k in range(steps + 1)]
+
+
+def _straighten(path: list[tuple[int, int]], clear: dict[tuple[int, int], int]) -> list[tuple[int, int]]:
+    """The walk as straight lines: from each corner, as far as a straight
+    line goes over the floor without getting closer to the walls than the
+    walk did."""
+    out = [path[0]]
+    i = 0
+    while i < len(path) - 1:
+        j = len(path) - 1
+        while j > i + 1:
+            margin = min(clear[p] for p in path[i:j + 1])
+            if all(clear.get(c, 0) >= margin for c in _line_cells(path[i], path[j])):
+                break
+            j -= 1
+        out.append(path[j])
+        i = j
     return out
 
 
 def _area_paths(part: set[tuple[int, int]], exit_cells: list[tuple[int, int]],
-                cols: int, rows: int) -> list[list[tuple[float, float]]]:
+                cols: int, rows: int, groups: list[list[tuple[int, int]]] = ()) -> list[list[tuple[float, float]]]:
     """Routes joining the part's exits over its floor, as a small tree. A part
-    with a single exit gets a route to its middle (a dead end)."""
-    cells = list(dict.fromkeys(exit_cells))
+    with a single exit gets a route to its middle (a dead end). The exits of
+    a group lead to the same place: the tree only reaches the nearest one."""
+    grouped = {c for g in groups for c in g}
+    cells = list(dict.fromkeys(c for c in exit_cells if c not in grouped))
+    for g in groups:
+        g = [c for c in g if c in part]
+        if not g:
+            continue
+        if not cells:
+            cells.append(g[0])
+            continue
+        cells.append(min(g, key=lambda c: len(_route(part, c, set(cells)))))
+    clear = _clearance(part)
+    # The paths meet in the middle: the cell the exits reach the easiest
+    # together (a dead end's single exit leads there too).
+    walks = [_distances(part, clear, c) for c in cells]
     if len(cells) == 1:
         cx = sum(x for x, _ in part) / len(part)
         cy = sum(y for _, y in part) / len(part)
-        cells.append(min(part, key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2))
-    tree = {cells[0]}
+        hub = min(part, key=lambda p: (-clear[p], (p[0] - cx) ** 2 + ((p[1] - cy) * _ASPECT_Y) ** 2, p))
+    else:
+        hub = min(part, key=lambda p: (sum(best.get(p, math.inf) for best, _ in walks), p))
+    # Each exit, nearest first, joins the paths drawn so far by its easiest walk.
+    tree = {hub}
     routes = []
-    for cell in cells[1:]:
-        route = _route(part, cell, tree)
+    for k in sorted(range(len(cells)), key=lambda k: walks[k][0].get(hub, math.inf)):
+        best, previous = walks[k]
+        reached = [p for p in tree if p in best]
+        if not reached or cells[k] in tree:
+            continue
+        p = min(reached, key=lambda p: (best[p], p))
+        route = [p]
+        while route[-1] != cells[k]:
+            route.append(previous[route[-1]])
+        route = _straighten(route[::-1], clear)
+        # Later paths join this one where it's drawn: at cells right on its lines.
+        for a, b in zip(route, route[1:]):
+            tree.update(c for c in _line_cells(a, b)
+                        if c in part and (b[0] - a[0]) * (c[1] - a[1]) == (b[1] - a[1]) * (c[0] - a[0]))
         tree.update(route)
-        if len(route) > 1:
-            routes.append([(round(x / cols, 3), round(y / rows, 3)) for x, y in _straighten(route)])
+        routes.append([_uv(p, cols, rows) for p in route])
     return routes
 
 
@@ -306,8 +409,9 @@ def _on_edge(x: int, y: int, cols: int, rows: int) -> bool:
     return x <= EDGE_MARGIN or x >= cols - EDGE_MARGIN or y <= EDGE_MARGIN or y >= rows - EDGE_MARGIN
 
 
-def map_areas(variables: dict[str, object]) -> list[Area]:
-    """The walkable parts of a map that have exits."""
+def map_areas(variables: dict[str, object], together: list[set[tuple[float, float]]] = ()) -> list[Area]:
+    """The walkable parts of a map that have exits. Suns of a `together`
+    group (by their uv) lead to the same place: paths only reach one."""
     cells, cols, rows = read_cells(variables)
     seen: set[tuple[int, int]] = set()
     areas = []
@@ -324,10 +428,10 @@ def map_areas(variables: dict[str, object]) -> list[Area]:
             stack += [(p[0] + dx, p[1] + dy) for dx, dy in _STEPS]
         suns = [p for p in part if cells[p][1]]
         if suns:
-            center = (round(sum(x for x, _ in part) / len(part) / cols, 3),
-                      round(sum(y for _, y in part) / len(part) / rows, 3))
+            center = _uv((sum(x for x, _ in part) / len(part), sum(y for _, y in part) / len(part)), cols, rows)
             exits = _exits(suns, cols, rows)
-            paths = _area_paths(set(part), [cell for _, cell in exits], cols, rows)
+            groups = [[cell for e, cell in exits if e.uv in g] for g in together]
+            paths = _area_paths(set(part), [cell for _, cell in exits], cols, rows, [g for g in groups if len(g) > 1])
             areas.append(Area(center, [e for e, _ in exits], paths))
     return areas
 
