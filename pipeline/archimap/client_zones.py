@@ -34,6 +34,7 @@ from pathlib import Path
 from .client_maps import Entrance, Passage, find_entrances, find_maps_dir, main_maps, read_layouts, sun_on_side, sun_passages
 from .corrections import apply_link_corrections
 from .export import update_zone_index
+from .floors import build_floors, zone_floors
 from .sol import read_sol
 
 Coords = tuple[int, int]
@@ -145,6 +146,48 @@ def added_passages(config: dict, areas) -> list:
     return out
 
 
+def build_stacked_zone(slug: str, config: dict, client: ClientData,
+                       maps_dir: Path | None = None) -> tuple[dict, list[str]]:
+    """zone.json content for a zone of landings over the same cells (see floors.py)."""
+    subareas = [int(part["client_subarea"]) for part in zone_parts(config)]
+    coords_of = {i: xy for maps in client.maps.values() for i, xy in maps}
+    subarea_of = {i: client.subareas[s][0] for s, maps in client.maps.items() for i, _ in maps}
+    # Maps left out by hand, by id (rooms no walk reaches, see docs/arbre-hakam.md).
+    left_out = set(config.get("remove_map_ids", []))
+    zone_ids = [i for s in subareas for i, _ in client.maps.get(s, []) if i not in left_out]
+    floors = zone_floors(config, zone_ids, coords_of)
+    maps, passages, links, stairs, found, unreadable = build_floors(floors, coords_of, maps_dir, config.get("walked", []),
+                                                                     config.get("walked_suns", []))
+    for m in maps:
+        m["subarea"] = subarea_of[m["id"]]
+    names = [f.get("name") for f in floors]
+    # The zone is entered on its first landing: suns out of the others lead to
+    # their own sub-areas. "entrance_cells" keeps only the suns of those maps.
+    entered = config.get("entrance_floors", [0])
+    cells = {tuple(c) for c in config.get("entrance_cells", [])}
+    entrances = [{**entry, "floor": n} for n, e in found if n in entered and (not cells or e.coords in cells)
+                 for entry in zone_entrances([e], {}, client, subareas)]
+    # Ways in listed by hand, by map id (a zaap).
+    floor_of = {m["id"]: m["floor"] for m in maps}
+    for e in config.get("entrances", []):
+        if e["map"] in floor_of:
+            x, y = coords_of[e["map"]]
+            entrances.append({"x": x, "y": y, "area": e.get("area", 0), "kind": e.get("kind", "manual"),
+                              "to": e.get("label", ""), "floor": floor_of[e["map"]]})
+    zone = {"zone": slug, "name": config.get("name") or client.subareas[subareas[0]][0], "source_video": None,
+            "tile_size": DEFAULT_TILE_SIZE, "maps": maps, "links": links, "passages": passages, "stairs": stairs,
+            "entrances": entrances,
+            "floors": [{**({"name": name} if name else {}), **({"check": False} if f.get("check") is False else {}),
+                        "maps": len(f["maps"])} for f, name in zip(floors, names)],
+            "subareas": [client.subareas[s][0] for s in subareas]}
+    counted = sum(f["maps"] for f in zone["floors"] if f.get("check", True))
+    notes = [f"{len(maps)} maps on {len(floors)} landings ({counted} to check)",
+             f"{len(passages)} passages within landings", f"{len({(st['a'][0], st['b'][0]) for st in stairs})} stairs between them"]
+    if unreadable:
+        notes.append(f"{unreadable} map(s) without a readable map file joined to their neighbours")
+    return zone, notes
+
+
 def build_zone(slug: str, config: dict, client: ClientData, existing: dict | None,
                config_path: Path, maps_dir: Path | None = None) -> tuple[dict, list[str]]:
     """zone.json content for a configured zone, merged with a recorded one if any.
@@ -153,6 +196,8 @@ def build_zone(slug: str, config: dict, client: ClientData, existing: dict | Non
     walked in the recording; maps without a readable map file are joined to
     all their neighbours.
     """
+    if config.get("stacked"):
+        return build_stacked_zone(slug, config, client, maps_dir)
     parts = zone_parts(config)
     subareas = [int(part["client_subarea"]) for part in parts]
     by_coords: dict[Coords, list[int]] = {}
@@ -300,9 +345,11 @@ def main(argv: list[str] | None = None) -> int:
         zone, notes = build_zone(slug, config, client, existing, config_path, maps_dir)
         zone_json.parent.mkdir(parents=True, exist_ok=True)
         zone_json.write_text(json.dumps(zone, indent=2, ensure_ascii=False) + "\n")
-        update_zone_index(data_dir, slug, zone["name"], len(zone["maps"]),
+        counted = (sum(f["maps"] for f in zone["floors"] if f.get("check", True)) if "floors" in zone
+                   else len(zone["maps"]))
+        update_zone_index(data_dir, slug, zone["name"], counted,
                           subarea=client.subareas[zone["client_subarea"]][0] if "client_subarea" in zone else None,
-                          parts=zone.get("parts"))
+                          parts=zone.get("parts"), subareas=zone.get("subareas"))
         print(f"  {slug}: {zone['name']}: " + "; ".join(notes))
         imported += 1
     if not imported:

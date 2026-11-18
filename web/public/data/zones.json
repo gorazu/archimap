@@ -1,6 +1,15 @@
 {
   "zones": [
     {
+      "zone": "arbre-hakam",
+      "name": "Arbre Hakam",
+      "maps": 58,
+      "subareas": [
+        "Tronc de l'arbre Hakam",
+        "Feuillage de L'arbre Hakam"
+      ]
+    },
+    {
       "zone": "caverne-des-fungus",
       "name": "Caverne des Fungus",
       "maps": 30,
