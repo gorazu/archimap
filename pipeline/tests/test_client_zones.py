@@ -80,6 +80,18 @@ def test_recorded_zone_keeps_its_maps_and_gets_missing_ones(tmp_path):
     assert notes[0] == "1 map(s) added to the 2 recorded ones"
 
 
+def test_removed_maps_are_left_out(tmp_path):
+    client = fake_client(tmp_path)
+    recorded = {"zone": "egout", "name": "x", "source_video": "v.mkv", "tile_size": [100, 60],
+                "maps": [{"x": 0, "y": 0, "source": "ocr"}, {"x": 1, "y": 0, "source": "ocr"}],
+                "route_links": [[0, 0, 1, 0]]}
+    config = {"client_subarea": 7, "remove_maps": [[1, 0]]}
+    zone, notes = build_zone("egout", config, client, recorded, tmp_path / "none.json")
+    assert [(m["x"], m["y"]) for m in zone["maps"]] == [(0, 0), (1, 1)]
+    assert zone["links"] == []
+    assert "1 map(s) removed" in notes
+
+
 def test_reimport_does_not_duplicate_client_maps(tmp_path):
     client = fake_client(tmp_path)
     first, _ = build_zone("egout", {"client_subarea": 7}, client, None, tmp_path / "none.json")

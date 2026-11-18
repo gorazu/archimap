@@ -79,6 +79,8 @@ They are applied on every import. To apply them right away to an existing zone, 
 
 A sun can lead to a map that isn't its neighbour on that side (in Souterrain d'Astrub, the left sun of [6,-19] leads to [5,-20]). Add such passages with `"add_passages": [{"a": [6, -19, "left"], "b": [5, -20, "right"]}]`: each end is a map and the side of its sun, or just the map when there is no sun to come back by.
 
+Maps with no monsters, so nothing to check, can be left out with `"remove_maps": [[x, y]]` (Égouts de Bonta drops the dead-end loop [-28,-54], [-27,-54], [-28,-53], [-27,-53]). Only remove maps that no walk needs to cross: their passages go too, and a sun towards them doesn't become an entrance.
+
 **Entrances**, where suggested walks start, are found in the map files: ladders and doors leading out of the zone, and suns facing a map outside it. Remove a wrong one with `"remove_entrances": [[x, y]]`, or add one the files can't show (an NPC, for example) with `"entrances": [{"x": -3, "y": 14, "label": "PNJ"}]` (`"area"` picks the part of a split map, 0 by default).
 
 ## Adding a gameplay recording (optional)
