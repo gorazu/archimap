@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { drawLayout } from "../data/layout";
 import type { RouteStep, ZoneGraph } from "../data/route";
-import { mapKey, type MapEntry, type Zone } from "../data/zones";
+import { gameCoords, mapKey, type MapEntry, type Zone } from "../data/zones";
 import type { CheckedSet } from "../progress/progressStore";
 
 // A small always-on-top window (Document Picture-in-Picture, Chrome and Edge)
@@ -158,7 +158,7 @@ function MiniMap({ zone, checked, current, nextStep, graph }: {
             {checked.has(key) && <rect x={x + 1} y={y + 1} width={TILE_W - 2} height={tileH - 2} className="mini-checked" />}
             {key === current && <rect x={x + 2} y={y + 2} width={TILE_W - 4} height={tileH - 4} className="mini-current" />}
             <text x={x + 5} y={y + 13} className="mini-label">
-              {m.x},{m.y}
+              {gameCoords(m).join(",")}
             </text>
           </g>
         );
