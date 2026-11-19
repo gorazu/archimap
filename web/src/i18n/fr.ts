@@ -120,6 +120,7 @@ const fr = {
     analysing: "Analyse de la fenêtre…",
     ocrPreview: "Ce que lit l'OCR",
     moves: "Changements de map vus",
+    landings: "Paliers possibles",
     stability: "Stabilité : {{count}} lectures identiques",
     autoZone: "Changer de zone automatiquement",
     recalibrate: "Recalibrer la détection",
