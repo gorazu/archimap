@@ -47,6 +47,24 @@ export function isLoadingFrame(frame: Pick<FrameEdges, "small">): boolean {
   return mean(frame.small) < 25;
 }
 
+/** Mean grey-level difference between two thumbnails of the same size. */
+export function viewDistance(a: ArrayLike<number>, b: ArrayLike<number>): number {
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff += Math.abs(a[i] - b[i]);
+  return a.length ? diff / a.length : 0;
+}
+
+/**
+ * Whether the game view shows another map: most of it changed, not a part
+ * (a window opened over it, a fight's overlay, a monster group walking by).
+ * Stairs between landings keep the coordinates but change the whole picture.
+ */
+export function isOtherScene(a: ArrayLike<number>, b: ArrayLike<number>, minFraction = 0.6): boolean {
+  let changed = 0;
+  for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > 30) changed++;
+  return changed >= minFraction * a.length;
+}
+
 /** True if the frame shows a clearly different picture from all the others. */
 export function isDistinct(frame: FrameEdges, others: FrameEdges[], minDiff = 15): boolean {
   return others.every((o) => {

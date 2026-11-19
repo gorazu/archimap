@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { GrayImage } from "./image";
-import { coordsBoxFromLabel, defaultCoordsBox, detectGameArea, frameEdges, isDistinct, isLoadingFrame } from "./layout";
+import { coordsBoxFromLabel, defaultCoordsBox, detectGameArea, frameEdges, isDistinct, isLoadingFrame, isOtherScene } from "./layout";
 
 /** Fake window: detailed map top-left, chat panel right, UI bar below, 2px borders. */
 function windowFrame(seed: number, w: number, h: number, gw: number, gh: number): GrayImage {
@@ -71,4 +71,12 @@ test("coordinates box from the label words", () => {
   ];
   expect(coordsBoxFromLabel(words, { x: 0, y: 0, w: 480, h: 126 }, 2)).toEqual({ x: 173, y: 59, w: 151, h: 34 });
   expect(coordsBoxFromLabel([{ text: "Bonta", bbox: { x0: 0, y0: 0, x1: 10, y1: 10 } }], { x: 0, y: 0, w: 1, h: 1 }, 1)).toBeNull();
+});
+
+test("another scene is most of the view changed, not a window over part of it", () => {
+  const map = new Float32Array(576).map((_, i) => (i * 37) % 255);
+  const window = map.map((v, i) => (i < 200 ? 128 : v));
+  const other = map.map((v) => 255 - v);
+  expect(isOtherScene(window, map)).toBe(false);
+  expect(isOtherScene(other, map)).toBe(true);
 });
