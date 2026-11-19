@@ -232,6 +232,8 @@ export function App() {
     // Not in the zone shown (yet): kept for when it's switched to the player's zone.
     if (positionZone !== zoneSlug) return setTrail([]);
     seenArrival.current = arrival;
+    // The count starts over with each capture.
+    if (arrival.moves < movesBefore.current) movesBefore.current = 0;
     const moves = arrival.moves - movesBefore.current;
     movesBefore.current = arrival.moves;
     setTrail((before) => {
@@ -419,6 +421,11 @@ export function App() {
         {liveOpen && zone && (
           <LivePanel
             live={live}
+            landings={
+              stacked && positionZone === zoneSlug
+                ? [...new Set(maybe.map((k) => tree!.maps.find((m) => mapKey(m.x, m.y) === k)?.floor ?? -1))].sort((a, b) => a - b)
+                : null
+            }
             positionZone={positionZone ? (zones?.find((z) => z.zone === positionZone)?.name ?? null) : null}
             guide={guide}
             floating={FLOATING_SUPPORTED ? { open: floating.win !== null, onToggle: floating.win ? floating.close : floating.open } : undefined}

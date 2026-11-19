@@ -7,6 +7,8 @@ interface Props {
   live: LiveCapture;
   /** Name of the zone the current position belongs to, or null if none. */
   positionZone: string | null;
+  /** Landings the player can be on where maps are stacked (several while in doubt). */
+  landings: number[] | null;
   /** Where to go next, on the shortest walk over the maps left to check. */
   guide: { next: string; rest: string | null; unreachable: number } | null;
   /** The floating guide window, when the browser has it. */
@@ -14,7 +16,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function LivePanel({ live, positionZone, guide, floating, onClose }: Props) {
+export function LivePanel({ live, positionZone, landings, guide, floating, onClose }: Props) {
   const { state, options, setOptions } = live;
   const active = state.status === "running" || state.status === "paused";
   const position = state.position;
@@ -119,6 +121,12 @@ export function LivePanel({ live, positionZone, guide, floating, onClose }: Prop
             <dd>{state.location ?? t("live.unreadable")}</dd>
             <dt>{t("live.moves")}</dt>
             <dd>{state.moves}</dd>
+            {landings && (
+              <>
+                <dt>{t("live.landings")}</dt>
+                <dd>{landings.length ? landings.join(", ") : "?"}</dd>
+              </>
+            )}
             <dt>{t("live.reading")}</dt>
             <dd>
               <code>{state.readings.length ? state.readings.map((r) => r || "—").join("  |  ") : "—"}</code>

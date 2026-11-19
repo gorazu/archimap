@@ -119,6 +119,7 @@ const en: Resources = {
     analysing: "Analysing the window…",
     ocrPreview: "What OCR reads",
     moves: "Map changes seen",
+    landings: "Possible landings",
     stability: "Stability: {{count}} identical readings",
     autoZone: "Switch zones automatically",
     recalibrate: "Recalibrate detection",
