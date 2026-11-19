@@ -10,11 +10,13 @@ import {
   frameEdges,
   isDistinct,
   isLoadingFrame,
+  isOtherScene,
   labelRegion,
   labelScale,
   LABEL_THRESHOLD,
   type FrameEdges,
   type OcrWord,
+  viewDistance,
 } from "./layout";
 import { parseLocation } from "./location";
 import { binarize, decodeText, readingValue, TEXT_VARIANTS, type Coords, type Surroundings } from "./ocr";
@@ -79,6 +81,8 @@ const TICK_MS = 400;
  */
 const CAPTURE_FPS = 30;
 const LOADING_MS = 30;
+/** The game view counts as settled once it stays the same this long (no scrolling fade, no loading). */
+const SETTLE_MS = 400;
 const LAYOUT_SAMPLES = 12;
 const LAYOUT_SAMPLE_MS = 1000;
 /** The top-left corner (location line, and the label until found) is read this often. */
@@ -120,6 +124,10 @@ export class LiveSession {
   /** A tiny copy of the game view, to spot loading screens. */
   private thumb: HTMLCanvasElement | null = null;
   private loading = false;
+  /** The game view as last settled, and the frame before, to tell map changes without loading screens. */
+  private settledView: Float32Array | null = null;
+  private lastView: Float32Array | null = null;
+  private sameSince = 0;
   /** The check in progress, so stopping can wait for its OCR jobs to end. */
   private busy: Promise<void> = Promise.resolve();
   private tracker = new PositionTracker();
@@ -183,6 +191,7 @@ export class LiveSession {
     this.cancelWatch?.();
     this.cancelWatch = null;
     this.loading = false;
+    this.settledView = this.lastView = null;
     this.ticker?.close();
     this.ticker = null;
     this.stream?.getTracks().forEach((t) => t.stop());
@@ -274,19 +283,36 @@ export class LiveSession {
     });
   }
 
-  /** One loading screen (a dark game view) is one map change. */
+  /**
+   * A map change is a loading screen (a dark game view), or else the whole
+   * view settling on another picture: loading screens can be too short to
+   * be captured, and stairs keep the coordinates.
+   */
   private checkLoading(source: CanvasImageSource) {
     if (this.state.status !== "running" || !this.game) return;
     const { x, y, w, h } = this.game;
     this.thumb ??= canvas(32, 18);
     const ctx = this.thumb.getContext("2d", { willReadFrequently: true })!;
     ctx.drawImage(source, x, y, w, h, 0, 0, 32, 18);
-    const loading = isLoadingFrame({ small: toGray(ctx.getImageData(0, 0, 32, 18)).data });
+    const view = toGray(ctx.getImageData(0, 0, 32, 18)).data;
+    const loading = isLoadingFrame({ small: view });
     if (loading && !this.loading) {
-      this.tracker.moved();
-      this.update({ moves: this.state.moves + 1 });
+      this.moved();
+      this.settledView = null; // The next settled view is the new map's.
     }
     this.loading = loading;
+    if (loading) return;
+    const now = performance.now();
+    if (!this.lastView || viewDistance(view, this.lastView) > 6) this.sameSince = now;
+    this.lastView = view;
+    if (now - this.sameSince < SETTLE_MS) return;
+    if (this.settledView && isOtherScene(view, this.settledView)) this.moved();
+    if (!this.settledView || isOtherScene(view, this.settledView)) this.settledView = view;
+  }
+
+  private moved() {
+    this.tracker.moved();
+    this.update({ moves: this.state.moves + 1 });
   }
 
   private async tick() {
