@@ -229,17 +229,21 @@ export function App() {
   const { arrival } = live.state;
   useEffect(() => {
     if (!arrival || arrival === seenArrival.current || !routeZone || !next) return;
+    // Not in the zone shown (yet): kept for when it's switched to the player's zone.
+    if (positionZone !== zoneSlug) return setTrail([]);
     seenArrival.current = arrival;
     const moves = arrival.moves - movesBefore.current;
     movesBefore.current = arrival.moves;
-    if (positionZone !== zoneSlug) return setTrail([]);
     setTrail((before) => {
       const maybe = followMaps(routeZone, next, before.at(-1)?.maybe ?? [], { position: arrival.position, moves });
       // Once a map is known for sure, the arrivals before it don't matter any more.
       return [...(before.at(-1)?.maybe.length === 1 ? before.slice(-1) : before), { maybe, moves }];
     });
   }, [arrival, positionZone, zoneSlug, routeZone, next]);
-  const maybe = trail.at(-1)?.maybe ?? [];
+  // Before any arrival in this zone: the maps at the coordinates read.
+  const maybe =
+    trail.at(-1)?.maybe ??
+    (position && routeZone && next ? followMaps(routeZone, next, [], { position, moves: 0 }) : []);
   const followed = maybe.length === 1 && positionZone === zoneSlug ? maybe[0] : null;
   const followedMap = useMemo(
     () => (tree && followed ? tree.maps.find((m) => mapKey(m.x, m.y) === followed) ?? null : null),
